@@ -25,3 +25,4 @@ Suggests:
 Config/testthat/edition: 3
 RoxygenNote: 7.3.2
 URL: https://janickweberpals.github.io/encore.analytics/
+License: Apache License (>= 2)
