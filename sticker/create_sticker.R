@@ -22,3 +22,5 @@ sticker(
   dpi = 1200,
   filename="man/figures/encore.analytics_hexagon.png"
   )
+
+?usethis::use_logo("man/figures/encore.analytics_hexagon.png")
