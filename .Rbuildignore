@@ -4,3 +4,6 @@
 ^\.Rproj\.user$
 ^\.github$
 ^README\.Rmd$
+^\sticker$
+sticker
+^LICENSE\.md$

@@ -1,11 +1,12 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# encore.analytics
+# encore.analytics <img src="./man/figures/encore.analytics_hexagon.png" align="right" width="180"/>
 
 <!-- badges: start -->
 
 [![R-CMD-check](https://github.com/janickweberpals/encore.analytics/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/janickweberpals/encore.analytics/actions/workflows/R-CMD-check.yaml)
+
 <!-- badges: end -->
 
 The goal of encore.analytics is to …
