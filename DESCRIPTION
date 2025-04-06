@@ -13,10 +13,13 @@ Imports:
     assertthat,
     dplyr,
     forcats,
+    ggplot2,
     gtsummary,
     locfit,
+    MatchThem,
     mice,
     simsurv,
+    survival,
     tibble
 Suggests: 
     testthat (>= 3.0.0)

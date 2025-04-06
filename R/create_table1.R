@@ -24,6 +24,7 @@
 #' @examples
 #' \dontrun{
 #' library(encore.analytics)
+#'
 #' # simulate a cohort with 1,000 patients with 20% missing data
 #' data <- simulate_data(
 #'   n = 1000,
