@@ -1,7 +1,7 @@
 
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# encore.analytics <img src="./man/figures/encore.analytics_hexagon.png" align="right" width="180"/>
+# encore.analytics <img src="man/figures/logo.png" align="right" height="139" alt="" />
 
 <!-- badges: start -->
 
@@ -23,9 +23,8 @@ pak::pak("janickweberpals/encore.analytics")
 
 ## Example
 
-This is a basic example which shows you how to solve a common problem:
+For a comprehensive walkthrough and examples, please refer to the
+[vignette](https://janickweberpals.github.io/imputation-ps-workflows/)
+at:
 
-``` r
-library(encore.analytics)
-## basic example code
-```
+<https://janickweberpals.github.io/imputation-ps-workflows/>

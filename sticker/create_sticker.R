@@ -3,7 +3,7 @@ library(hexSticker)
 library(here)
 
 # sticker for package
-img_path <- here("sticker", "logo.png")
+img_path <- here("sticker", "artwork.png")
 
 sticker(
   subplot = img_path,
