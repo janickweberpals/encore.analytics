@@ -270,7 +270,7 @@ simulate_data <- function(n_total = 3500,
       prop = propNA,
       patterns = pattern,
       mech = "MCAR"
-    )$amp
+      )$amp
 
   }
 
