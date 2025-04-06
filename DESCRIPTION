@@ -12,6 +12,8 @@ LazyData: true
 Imports: 
     assertthat,
     dplyr,
+    forcats,
+    gtsummary,
     locfit,
     mice,
     simsurv,
