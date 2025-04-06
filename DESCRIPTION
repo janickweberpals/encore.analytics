@@ -5,8 +5,7 @@ Version: 0.1.0
 Authors@R: c(
     person("Janick", "Weberpals", email = "janick.developer@gmail.com", role = c("aut", "cre"), comment = c(ORCID = "0000-0003-0404-7394")))
 Description: This package contains functions to streamline the analytics for the ENCORE trial emulation project.
-BugReports: https://gitlab.partners.org/drugepi/encore/encore.io
-License: Apache License (>= 2)
+BugReports: https://github.com/janickweberpals/encore.analytics/issues
 Encoding: UTF-8
 LazyData: true
 Imports: 
