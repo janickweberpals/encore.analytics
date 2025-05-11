@@ -43,68 +43,65 @@ The function follows the following logic:
 \item Extract the ith imputed dataset from the mimids or wimids object
 \item Create a temporary case/patient ID
 \item Apply the \code{\link[anesrake]{anesrake}} function to the ith imputed dataset
-\item Create a temporary dataframe with the case ID and the raking weights
+\item Create a temporary dataframe with the case ID and replace the initial weights with the updated raking weights
 \item Merge the temporary dataframe with the ith imputed dataset
 \item Drop the temporary case ID
 \item Return the ith imputed dataset with the raking weights
 }
 
 The function returns a list of data frames with the updated raking weights. These
-updated raking weights are stored in each data frame under the column name \code{raking_weights}.
-This column can then be used in a downstream analysis (Kaplan-Meier, Cox proportional hazards regression).
+updated raking weights overwrite in each data frame the existing \code{weights} column.
+This column can then be used in a downstream analysis (e.g., Kaplan-Meier, Cox proportional hazards regression).
 }
 \examples{
-if(require("MatchThem")){
 
-   library(encore.analytics)
-   library(mice)
-   library(dplyr)
-   library(MatchThem)
-   library(survival)
+ library(encore.analytics)
+ library(mice)
+ library(dplyr)
+ library(MatchThem)
+ library(survival)
 
-   # simulate a cohort with 1,000 patients with 20\% missing data
-   data <- simulate_data(
-     n = 1000,
-     imposeNA = TRUE,
-     propNA = 0.2
-     ) |>
-     # anesrake works best with factor variables
-     mutate(c_smoking_history = factor(ifelse(c_smoking_history == TRUE, "Current/former", "Never")))
+ # simulate a cohort with 1,000 patients with 20\% missing data
+ data <- simulate_data(
+   n = 1000,
+   imposeNA = TRUE,
+   propNA = 0.2
+   ) |>
+   # anesrake works best with factor variables
+   mutate(c_smoking_history = factor(ifelse(c_smoking_history == TRUE, "Current/former", "Never")))
 
-   # impute the data (create mids object)
-   set.seed(42)
-   mids <- mice(data, m = 5, print = FALSE)
+ # impute the data (create mids object)
+ set.seed(42)
+ mids <- mice(data, m = 5, print = FALSE)
 
-   # define covariates for propensity score model
-   covariates <- data |>
-     select(starts_with("c_"), starts_with("dem_")) |>
-     colnames()
+ # define covariates for propensity score model
+ covariates <- data |>
+  select(starts_with("c_"), starts_with("dem_")) |>
+   colnames()
 
-   # define propensity score model
-   fit <- as.formula(paste("treat ~", paste(covariates, collapse = " + ")))
+ # define propensity score model
+ fit <- as.formula(paste("treat ~", paste(covariates, collapse = " + ")))
 
-   # match patients within each imputed dataset
-   mimids <- matchthem(
-     formula = fit,
-     datasets = mids,
-     approach = 'within',
-     method = 'nearest'
-     )
+ # match patients within each imputed dataset
+ mimids <- matchthem(
+   formula = fit,
+   datasets = mids,
+   approach = 'within',
+   method = 'nearest'
+   )
 
-   smoker_target <- c(.35, .65)
-   names(smoker_target) <- c("Current/former", "Never")
+ smoker_target <- c(.35, .65)
+ names(smoker_target) <- c("Current/former", "Never")
 
-   # summarize target distributions in a named list vector
-   targets <- list(smoker_target)
-   names(targets) <- c("c_smoking_history")
+ # summarize target distributions in a named list vector
+ targets <- list(smoker_target)
+ names(targets) <- c("c_smoking_history")
 
-   # estimate raking weights
-   mirwds <- raking_weights(
-     x = mimids,
-     targets = targets
-     )
-
-}
+ # estimate raking weights
+ mirwds <- raking_weights(
+   x = mimids,
+   targets = targets
+   )
 
 }
 \seealso{

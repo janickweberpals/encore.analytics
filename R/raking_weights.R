@@ -28,14 +28,14 @@
 #' 1. Extract the ith imputed dataset from the mimids or wimids object
 #' 2. Create a temporary case/patient ID
 #' 3. Apply the \code{\link[anesrake]{anesrake}} function to the ith imputed dataset
-#' 4. Create a temporary dataframe with the case ID and the raking weights
+#' 4. Create a temporary dataframe with the case ID and replace the initial weights with the updated raking weights
 #' 5. Merge the temporary dataframe with the ith imputed dataset
 #' 6. Drop the temporary case ID
 #' 7. Return the ith imputed dataset with the raking weights
 #'
 #' The function returns a list of data frames with the updated raking weights. These
-#' updated raking weights are stored in each data frame under the column name \code{raking_weights}.
-#' This column can then be used in a downstream analysis (Kaplan-Meier, Cox proportional hazards regression).
+#' updated raking weights overwrite in each data frame the existing \code{weights} column.
+#' This column can then be used in a downstream analysis (e.g., Kaplan-Meier, Cox proportional hazards regression).
 #'
 #' @seealso
 #' \code{\link[anesrake]{anesrake}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}}
@@ -122,6 +122,14 @@ raking_weights <- function(x,
   # since we are only interested in matched/weighted cases
   estimate_raking_weights <- function(i){
 
+    # next, we create a list of datasets to apply the raking procedure one-by-one
+    # action = "all"  : produces a mild object (list) of the multiply imputed datasets
+    # all = FALSE     : do NOT include observations with a zero estimated weight
+    # include = FALSE : do NOT include original data with the missing values
+
+    # Important: the all = parameter needs to be set to FALSE
+    # since otherwise unmatched patients or those zero weight
+    # will be included, too!
     data <- MatchThem::complete(x, action = i, all = FALSE, include = FALSE)
 
     # create a temporary case ID
@@ -144,9 +152,11 @@ raking_weights <- function(x,
       )
 
     # create a temporary dataframe with id and sampling/re-weighting weights
-    caseweights <- data.frame(caseid = anesrake_out$caseid, raking_weights = anesrake_out$weightvec)
+    caseweights <- data.frame(caseid = anesrake_out$caseid, weights = anesrake_out$weightvec)
 
     data_return <- data |>
+      # remove "old" weights with new weights
+      dplyr::select(-weights) |>
       dplyr::left_join(caseweights, by = "caseid") |>
       # now we can drop the temporary id
       dplyr::select(-caseid)
