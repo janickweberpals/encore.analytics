@@ -50,57 +50,54 @@
 #' @export
 #'
 #' @examples
-#' if(require("MatchThem")){
 #'
-#'    library(encore.analytics)
-#'    library(mice)
-#'    library(dplyr)
-#'    library(MatchThem)
-#'    library(survival)
+#'  library(encore.analytics)
+#'  library(mice)
+#'  library(dplyr)
+#'  library(MatchThem)
+#'  library(survival)
 #'
-#'    # simulate a cohort with 1,000 patients with 20% missing data
-#'    data <- simulate_data(
-#'      n = 1000,
-#'      imposeNA = TRUE,
-#'      propNA = 0.2
-#'      ) |>
-#'      # anesrake works best with factor variables
-#'      mutate(c_smoking_history = factor(ifelse(c_smoking_history == TRUE, "Current/former", "Never")))
+#'  # simulate a cohort with 1,000 patients with 20% missing data
+#'  data <- simulate_data(
+#'    n = 1000,
+#'    imposeNA = TRUE,
+#'    propNA = 0.2
+#'    ) |>
+#'    # anesrake works best with factor variables
+#'    mutate(c_smoking_history = factor(ifelse(c_smoking_history == TRUE, "Current/former", "Never")))
 #'
-#'    # impute the data (create mids object)
-#'    set.seed(42)
-#'    mids <- mice(data, m = 5, print = FALSE)
+#'  # impute the data (create mids object)
+#'  set.seed(42)
+#'  mids <- mice(data, m = 5, print = FALSE)
 #'
-#'    # define covariates for propensity score model
-#'    covariates <- data |>
-#'      select(starts_with("c_"), starts_with("dem_")) |>
-#'      colnames()
+#'  # define covariates for propensity score model
+#'  covariates <- data |>
+#'   select(starts_with("c_"), starts_with("dem_")) |>
+#'    colnames()
 #'
-#'    # define propensity score model
-#'    fit <- as.formula(paste("treat ~", paste(covariates, collapse = " + ")))
+#'  # define propensity score model
+#'  fit <- as.formula(paste("treat ~", paste(covariates, collapse = " + ")))
 #'
-#'    # match patients within each imputed dataset
-#'    mimids <- matchthem(
-#'      formula = fit,
-#'      datasets = mids,
-#'      approach = 'within',
-#'      method = 'nearest'
-#'      )
+#'  # match patients within each imputed dataset
+#'  mimids <- matchthem(
+#'    formula = fit,
+#'    datasets = mids,
+#'    approach = 'within',
+#'    method = 'nearest'
+#'    )
 #'
-#'    smoker_target <- c(.35, .65)
-#'    names(smoker_target) <- c("Current/former", "Never")
+#'  smoker_target <- c(.35, .65)
+#'  names(smoker_target) <- c("Current/former", "Never")
 #'
-#'    # summarize target distributions in a named list vector
-#'    targets <- list(smoker_target)
-#'    names(targets) <- c("c_smoking_history")
+#'  # summarize target distributions in a named list vector
+#'  targets <- list(smoker_target)
+#'  names(targets) <- c("c_smoking_history")
 #'
-#'    # estimate raking weights
-#'    mirwds <- raking_weights(
-#'      x = mimids,
-#'      targets = targets
-#'      )
-#'
-#'}
+#'  # estimate raking weights
+#'  mirwds <- raking_weights(
+#'    x = mimids,
+#'    targets = targets
+#'    )
 #'
 raking_weights <- function(x,
                            targets = NULL
