@@ -6,7 +6,7 @@
 #' matched/weighted datasets
 #'
 #' @details
-#' The function requires an object of class mimids or wimids, which is the output
+#' The function requires an object of class mimids or wimids (\code{x}), which is the output
 #' of a workflow that requires imputing multiple (m) datasets using mice or amelia
 #' and matching or weighting each imputed dataset via the MatchThem package
 #' (see examples).
@@ -59,7 +59,7 @@
 #' @seealso
 #' \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}}
 #'
-#' @param object imputed and matched (mimids) or weighted (wimids) object
+#' @param x imputed and matched (mimids) or weighted (wimids) object
 #' @param surv_formula specification of survival model formula to be fitted
 #'
 #' @return list with pooled median survival estimate and pooled Kaplan-Meier curve
@@ -121,7 +121,7 @@
 #'
 #'   # estimate and pool median survival times and Kaplan-Meier curve
 #'   km_out <- km_pooling(
-#'     object = wimids,
+#'     x = wimids,
 #'     surv_formula = km_fit
 #'     )
 #'
@@ -134,20 +134,20 @@
 #' }
 #'
 
-km_pooling <- function(object = NULL,
+km_pooling <- function(x = NULL,
                        surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
                        ){
 
   # input checks
   # check if object is a mimids or wimids object
-  assertthat::assert_that(inherits(object, c("mimids", "wimids")), msg = "<object> needs to be a mimids or wimids object")
+  assertthat::assert_that(inherits(x, c("mimids", "wimids")), msg = "<x> needs to be a mimids or wimids object")
   # check if surv_formula is a formula
   assertthat::assert_that(inherits(surv_formula, "formula"), msg = "<surv_formula> needs to be a formula")
   # check weights and subclass
-  assertthat::assert_that("weights" %in% names(MatchThem::complete(object)), msg = "<object> needs to contain a weights column")
+  assertthat::assert_that("weights" %in% names(MatchThem::complete(x)), msg = "<object> needs to contain a weights column")
   # check if weights and subclass are in the data
   if(inherits(object, "mimids")){
-    assertthat::assert_that("subclass" %in% names(MatchThem::complete(object)), msg = "<object> needs to contain a weights column")
+    assertthat::assert_that("subclass" %in% names(MatchThem::complete(x)), msg = "<object> needs to contain a weights column")
   }
 
   # Fit Kaplan Meier --------------------------------------------------------
@@ -158,7 +158,7 @@ km_pooling <- function(object = NULL,
     # compute the survival function for dataset i
 
     ## for weighting
-    if(inherits(object, "wimids")){
+    if(inherits(x, "wimids")){
 
       survfit_fit <- survival::survfit(
         formula = surv_formula,
@@ -170,7 +170,7 @@ km_pooling <- function(object = NULL,
     }
 
     ## for matching
-    if(inherits(object, "mimids")){
+    if(inherits(x, "mimids")){
 
       survfit_fit <- survival::survfit(
         formula = surv_formula,
@@ -197,7 +197,7 @@ km_pooling <- function(object = NULL,
   # Important: the all = parameter needs to be set to FALSE
   # since otherwise unmatched patients or those zero weight
   # will be included, too!
-  object_list <- MatchThem::complete(object, action = "all", all = FALSE, include = FALSE)
+  object_list <- MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)
 
   # now apply the compute_km function across all imputed and matched/weighted datasets
   # this creates a list with computed survival probabilities

@@ -5,12 +5,12 @@
 \title{Pooled Kaplan-Meier estimate and survival curve}
 \usage{
 km_pooling(
-  object = NULL,
+  x = NULL,
   surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
 )
 }
 \arguments{
-\item{object}{imputed and matched (mimids) or weighted (wimids) object}
+\item{x}{imputed and matched (mimids) or weighted (wimids) object}
 
 \item{surv_formula}{specification of survival model formula to be fitted}
 }
@@ -45,7 +45,7 @@ and outputs corresponding Kaplan-Meier curve across imputed and
 matched/weighted datasets
 }
 \details{
-The function requires an object of class mimids or wimids, which is the output
+The function requires an object of class mimids or wimids (\code{x}), which is the output
 of a workflow that requires imputing multiple (m) datasets using mice or amelia
 and matching or weighting each imputed dataset via the MatchThem package
 (see examples).
@@ -136,7 +136,7 @@ if(require("MatchThem")){
 
   # estimate and pool median survival times and Kaplan-Meier curve
   km_out <- km_pooling(
-    object = wimids,
+    x = wimids,
     surv_formula = km_fit
     )
 

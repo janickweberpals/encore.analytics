@@ -1,15 +1,15 @@
 test_that("km_pooling throws error on incorrect object type", {
   dummy_data <- data.frame(x = 1:10, y = 1:10)
-  expect_error(km_pooling(object = dummy_data), "<object> needs to be a mimids or wimids object")
+  expect_error(km_pooling(x = dummy_data), "<x> needs to be a mimids or wimids object")
 })
 
 test_that("km_pooling throws error on incorrect surv_formula", {
-  expect_error(km_pooling(object = wimids, surv_formula = "not_a_formula"), "<surv_formula> needs to be a formula")
+  expect_error(km_pooling(x = wimids, surv_formula = "not_a_formula"), "<surv_formula> needs to be a formula")
 })
 
 test_that("km_pooling runs and returns correct structure", {
 
-  result <- km_pooling(object = wimids, surv_formula = km_fit)
+  result <- km_pooling(x = wimids, surv_formula = km_fit)
 
   expect_type(result, "list")
   expect_named(result, c("km_median_survival", "km_plot", "km_survival_table"))
