@@ -87,49 +87,48 @@
 #' @export
 #'
 #' @examples
-#' if(require("MatchThem")){
 #'
-#'   library(encore.analytics)
-#'   library(mice)
-#'   library(MatchThem)
+#'  library(encore.analytics)
+#'  library(mice)
+#'  library(MatchThem)
 #'
-#'   # simulate a cohort with 1,000 patients with 20% missing data
-#'   data <- simulate_data(
-#'     n = 1000,
-#'     imposeNA = TRUE,
-#'     propNA = 0.2
-#'     )
+#'  # simulate a cohort with 1,000 patients with 20% missing data
+#'  data <- simulate_data(
+#'    n = 500,
+#'    imposeNA = TRUE,
+#'    propNA = 0.2
+#'    )
 #'
-#'   # impute the data
-#'   set.seed(42)
-#'   mids <- mice(data, m = 5, print = FALSE)
+#'  # impute the data
+#'  set.seed(42)
+#'  mids <- mice(data, m = 5, print = FALSE)
 #'
-#'   # fit a propensity score model
-#'   fit <- as.formula(treat ~ dem_age_index_cont + dem_sex_cont + c_smoking_history)
+#'  # fit a propensity score model
+#'  fit <- as.formula(treat ~ dem_age_index_cont + dem_sex_cont + c_smoking_history)
 #'
-#'   # weight (or alternatively match) patients within each imputed dataset
-#'   wimids <- weightthem(
-#'     formula = fit,
-#'     datasets = mids,
-#'     approach = "within",
-#'     method = "glm",
-#'     estimand = "ATO"
-#'     )
+#'  # weight (or alternatively match) patients within each imputed dataset
+#'  wimids <- weightthem(
+#'    formula = fit,
+#'    datasets = mids,
+#'    approach = "within",
+#'    method = "glm",
+#'    estimand = "ATO"
+#'    )
 #'
-#'   # fit a survival model
-#'   km_fit <- as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
+#'  # fit a survival model
+#'  km_fit <- as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
 #'
-#'   # estimate and pool median survival times and Kaplan-Meier curve
-#'   km_out <- km_pooling(
-#'     x = wimids,
-#'     surv_formula = km_fit
-#'     )
+#'  # estimate and pool median survival times and Kaplan-Meier curve
+#'  km_out <- km_pooling(
+#'    x = wimids,
+#'    surv_formula = km_fit
+#'    )
 #'
-#'   # median survival time
-#'   km_out$km_median_survival
+#'  # median survival time
+#'  km_out$km_median_survival
 #'
-#'   # KM curve
-#'   km_out$km_plot
+#'  # KM curve
+#'  km_out$km_plot
 #'
 #' }
 #'
@@ -139,15 +138,15 @@ km_pooling <- function(x = NULL,
                        ){
 
   # input checks
-  # check if object is a mimids or wimids object
+  # check if x is a mimids or wimids object
   assertthat::assert_that(inherits(x, c("mimids", "wimids")), msg = "<x> needs to be a mimids or wimids object")
   # check if surv_formula is a formula
   assertthat::assert_that(inherits(surv_formula, "formula"), msg = "<surv_formula> needs to be a formula")
   # check weights and subclass
-  assertthat::assert_that("weights" %in% names(MatchThem::complete(x)), msg = "<object> needs to contain a weights column")
+  assertthat::assert_that("weights" %in% names(MatchThem::complete(x)), msg = "<x> needs to contain a weights column")
   # check if weights and subclass are in the data
-  if(inherits(object, "mimids")){
-    assertthat::assert_that("subclass" %in% names(MatchThem::complete(x)), msg = "<object> needs to contain a weights column")
+  if(inherits(x, "mimids")){
+    assertthat::assert_that("subclass" %in% names(MatchThem::complete(x)), msg = "<x> needs to contain a weights column")
   }
 
   # Fit Kaplan Meier --------------------------------------------------------

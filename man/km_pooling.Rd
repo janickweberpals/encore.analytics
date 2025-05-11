@@ -101,54 +101,6 @@ More references:
 \item https://bmcmedresmethodol.biomedcentral.com/articles/10.1186/s12874-015-0048-4
 }
 }
-\examples{
-if(require("MatchThem")){
-
-  library(encore.analytics)
-  library(mice)
-  library(MatchThem)
-
-  # simulate a cohort with 1,000 patients with 20\% missing data
-  data <- simulate_data(
-    n = 1000,
-    imposeNA = TRUE,
-    propNA = 0.2
-    )
-
-  # impute the data
-  set.seed(42)
-  mids <- mice(data, m = 5, print = FALSE)
-
-  # fit a propensity score model
-  fit <- as.formula(treat ~ dem_age_index_cont + dem_sex_cont + c_smoking_history)
-
-  # weight (or alternatively match) patients within each imputed dataset
-  wimids <- weightthem(
-    formula = fit,
-    datasets = mids,
-    approach = "within",
-    method = "glm",
-    estimand = "ATO"
-    )
-
-  # fit a survival model
-  km_fit <- as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
-
-  # estimate and pool median survival times and Kaplan-Meier curve
-  km_out <- km_pooling(
-    x = wimids,
-    surv_formula = km_fit
-    )
-
-  # median survival time
-  km_out$km_median_survival
-
-  # KM curve
-  km_out$km_plot
-
-}
-
-}
 \seealso{
 \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}}
 }
