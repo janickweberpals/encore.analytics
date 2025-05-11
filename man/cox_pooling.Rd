@@ -22,7 +22,22 @@ Function manually fits and pools results from Cox proportional hazards models us
 a list of imputed datasets.
 }
 \details{
+The function requires an list of imputed data frames with weights and cluster (matching) information
+and a formula for the Cox proportional hazards model. The data frames must have a column names \code{weights}
+and \code{subclass} (for matched datasets to indicate the cluster membership).
 
+This is a convenience wrapper for fitting Cox models to multiple imputed datasets
+which do not come as a \code{mimids} or \code{wimids} object. This is useful when
+there are intermediate steps in the analysis pipeline, such as computing raking weights
+via \code{raking_weights} which are so far not straightforward
+to implement in a \code{mimids} or \code{wimids} object.
+
+The function follows the following logic:
+\enumerate{
+\item Fit a Cox proportional hazards model to each imputed dataset; if a \code{subclass} column is present in the data, it is used as a cluster variable for matched pairs
+\item Pool the results using the \code{pool.scalar} function from the mice package, that is, univariate estimates (qbar) are pooled via formula (3.1.2) Rubin (1987) and the total variance (t) is estimated via robust standardard errors according to formula (3.1.5) Rubin (1987).
+\item Compute the confidence intervals and exponentiate the results via exp(qbar +/- 1.96 * sqrt(t))
+}
 }
 \examples{
 library(encore.analytics)

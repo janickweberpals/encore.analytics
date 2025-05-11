@@ -4,14 +4,15 @@
 #' Function manually fits and pools results from Cox proportional hazards models using
 #' a list of imputed datasets.
 #'
-#' @details The function requires an list of imputed data frames with weights and cluster (matching) information
-#' and a formula for the Cox proportional hazards model. The data frames must have a column names "weights"
-#' and "subclass" (for matched datasets to indicate the cluster membership).
+#' @details
+#' The function requires an list of imputed data frames with weights and cluster (matching) information
+#' and a formula for the Cox proportional hazards model. The data frames must have a column names \code{weights}
+#' and \code{subclass} (for matched datasets to indicate the cluster membership).
 #'
 #' This is a convenience wrapper for fitting Cox models to multiple imputed datasets
 #' which do not come as a \code{mimids} or \code{wimids} object. This is useful when
 #' there are intermediate steps in the analysis pipeline, such as computing raking weights
-#' via \code{\link[encore.analytics]{raking_weights} which are so far not straightforward
+#' via \code{raking_weights} which are so far not straightforward
 #' to implement in a \code{mimids} or \code{wimids} object.
 #'
 #' The function follows the following logic:

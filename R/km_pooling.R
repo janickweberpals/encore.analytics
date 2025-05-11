@@ -87,7 +87,6 @@
 #' @export
 #'
 #' @examples
-#'
 #'  library(encore.analytics)
 #'  library(mice)
 #'  library(MatchThem)
@@ -130,9 +129,6 @@
 #'  # KM curve
 #'  km_out$km_plot
 #'
-#' }
-#'
-
 km_pooling <- function(x = NULL,
                        surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
                        ){
