@@ -59,7 +59,7 @@
 #'
 #'  # simulate a cohort with 1,000 patients with 20% missing data
 #'  data <- simulate_data(
-#'    n = 1000,
+#'    n = 500,
 #'    imposeNA = TRUE,
 #'    propNA = 0.2
 #'    ) |>
