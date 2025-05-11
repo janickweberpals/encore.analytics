@@ -11,10 +11,11 @@ LazyData: true
 Imports: 
     anesrake,
     assertthat,
+    broom,
     dplyr,
     forcats,
     ggplot2,
-    gtsummary,
+    gtsummary (>= 2.0.0),
     locfit,
     MatchThem,
     mice,
