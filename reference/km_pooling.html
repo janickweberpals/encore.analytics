@@ -126,6 +126,65 @@ is used. Therneau also considers some edge cases/nuisances (x = time, y = surv):
     <div class="dont-index"><p><code><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></code> <code><a href="https://amices.org/mice/reference/pool.scalar.html" class="external-link">pool.scalar</a></code> <code><a href="https://rdrr.io/pkg/MatchThem/man/matchthem.html" class="external-link">matchthem</a></code> <code><a href="https://rdrr.io/pkg/MatchThem/man/weightthem.html" class="external-link">weightthem</a></code></p></div>
     </div>
 
+    <div class="section level2">
+    <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span class="r-in"><span> <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://janickweberpals.github.io/encore.analytics/">encore.analytics</a></span><span class="op">)</span></span></span>
+<span class="r-in"><span> <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/amices/mice" class="external-link">mice</a></span><span class="op">)</span></span></span>
+<span class="r-in"><span> <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/FarhadPishgar/MatchThem" class="external-link">MatchThem</a></span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># simulate a cohort with 1,000 patients with 20% missing data</span></span></span>
+<span class="r-in"><span> <span class="va">data</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_data.html">simulate_data</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>   n <span class="op">=</span> <span class="fl">500</span>,</span></span>
+<span class="r-in"><span>   imposeNA <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
+<span class="r-in"><span>   propNA <span class="op">=</span> <span class="fl">0.2</span></span></span>
+<span class="r-in"><span>   <span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># impute the data</span></span></span>
+<span class="r-in"><span> <span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span></span>
+<span class="r-in"><span> <span class="va">mids</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://amices.org/mice/reference/mice.html" class="external-link">mice</a></span><span class="op">(</span><span class="va">data</span>, m <span class="op">=</span> <span class="fl">5</span>, print <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-wrn co"><span class="r-pr">#&gt;</span> <span class="warning">Warning: </span>Number of logged events: 801</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># fit a propensity score model</span></span></span>
+<span class="r-in"><span> <span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/formula.html" class="external-link">as.formula</a></span><span class="op">(</span><span class="va">treat</span> <span class="op">~</span> <span class="va">dem_age_index_cont</span> <span class="op">+</span> <span class="va">dem_sex_cont</span> <span class="op">+</span> <span class="va">c_smoking_history</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># weight (or alternatively match) patients within each imputed dataset</span></span></span>
+<span class="r-in"><span> <span class="va">wimids</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/pkg/MatchThem/man/weightthem.html" class="external-link">weightthem</a></span><span class="op">(</span></span></span>
+<span class="r-in"><span>   formula <span class="op">=</span> <span class="va">fit</span>,</span></span>
+<span class="r-in"><span>   datasets <span class="op">=</span> <span class="va">mids</span>,</span></span>
+<span class="r-in"><span>   approach <span class="op">=</span> <span class="st">"within"</span>,</span></span>
+<span class="r-in"><span>   method <span class="op">=</span> <span class="st">"glm"</span>,</span></span>
+<span class="r-in"><span>   estimand <span class="op">=</span> <span class="st">"ATO"</span></span></span>
+<span class="r-in"><span>   <span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> Estimating weights     | dataset: #1</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>  #2</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>  #3</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>  #4</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>  #5</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># fit a survival model</span></span></span>
+<span class="r-in"><span> <span class="va">km_fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/formula.html" class="external-link">as.formula</a></span><span class="op">(</span><span class="fu">survival</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">fu_itt_months</span>, <span class="va">death_itt</span><span class="op">)</span> <span class="op">~</span> <span class="va">treat</span><span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># estimate and pool median survival times and Kaplan-Meier curve</span></span></span>
+<span class="r-in"><span> <span class="va">km_out</span> <span class="op">&lt;-</span> <span class="fu">km_pooling</span><span class="op">(</span></span></span>
+<span class="r-in"><span>   x <span class="op">=</span> <span class="va">wimids</span>,</span></span>
+<span class="r-in"><span>   surv_formula <span class="op">=</span> <span class="va">km_fit</span></span></span>
+<span class="r-in"><span>   <span class="op">)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># median survival time</span></span></span>
+<span class="r-in"><span> <span class="va">km_out</span><span class="op">$</span><span class="va">km_median_survival</span></span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 2 × 4</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   strata  t_median t_lower t_upper</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;fct&gt;</span>      <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> treat=0     16.7    14.0    19.6</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">2</span> treat=1     20.5    17.7    24.3</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># KM curve</span></span></span>
+<span class="r-in"><span> <span class="va">km_out</span><span class="op">$</span><span class="va">km_plot</span></span></span>
+<span class="r-plt img"><img src="km_pooling-1.png" alt="" width="700" height="433"></span>
+<span class="r-in"><span></span></span>
+</code></pre></div>
+    </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>
 

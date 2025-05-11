@@ -64,10 +64,18 @@ a list of imputed datasets.</p>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-
-
-
-    </div>
+    <p>The function requires an list of imputed data frames with weights and cluster (matching) information
+and a formula for the Cox proportional hazards model. The data frames must have a column names <code>weights</code>
+and <code>subclass</code> (for matched datasets to indicate the cluster membership).</p>
+<p>This is a convenience wrapper for fitting Cox models to multiple imputed datasets
+which do not come as a <code>mimids</code> or <code>wimids</code> object. This is useful when
+there are intermediate steps in the analysis pipeline, such as computing raking weights
+via <code>raking_weights</code> which are so far not straightforward
+to implement in a <code>mimids</code> or <code>wimids</code> object.</p>
+<p>The function follows the following logic:</p><ol><li><p>Fit a Cox proportional hazards model to each imputed dataset; if a <code>subclass</code> column is present in the data, it is used as a cluster variable for matched pairs</p></li>
+<li><p>Pool the results using the <code>pool.scalar</code> function from the mice package, that is, univariate estimates (qbar) are pooled via formula (3.1.2) Rubin (1987) and the total variance (t) is estimated via robust standardard errors according to formula (3.1.5) Rubin (1987).</p></li>
+<li><p>Compute the confidence intervals and exponentiate the results via exp(qbar +/- 1.96 * sqrt(t))</p></li>
+</ol></div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="https://rdrr.io/pkg/survival/man/coxph.html" class="external-link">coxph</a></code> <code><a href="https://amices.org/mice/reference/pool.scalar.html" class="external-link">pool.scalar</a></code> <code><a href="https://rdrr.io/pkg/MatchThem/man/matchthem.html" class="external-link">matchthem</a></code> <code><a href="https://rdrr.io/pkg/MatchThem/man/weightthem.html" class="external-link">weightthem</a></code></p></div>
