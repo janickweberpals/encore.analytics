@@ -135,7 +135,7 @@ simulate_data <- function(n_total = 3500,
     c_dbp_cont = stats::rnorm(n = n_total, mean = 76, sd = 6),
     # c_year_index
     c_year_index = factor(sample(c("<2018", "2018+"), size = n_total, replace = TRUE, prob = c(.95, .05)))
-  )
+    )
 
   # assign treatment probabilities
   cohort <- cohort |>
