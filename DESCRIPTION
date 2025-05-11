@@ -9,6 +9,7 @@ BugReports: https://github.com/janickweberpals/encore.analytics/issues
 Encoding: UTF-8
 LazyData: true
 Imports: 
+    anesrake,
     assertthat,
     dplyr,
     forcats,
