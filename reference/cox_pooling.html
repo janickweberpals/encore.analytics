@@ -141,10 +141,10 @@ to implement in a <code>mimids</code> or <code>wimids</code> object.</p>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># fit and pool Cox proportional hazards model results</span></span></span>
 <span class="r-in"><span><span class="fu">cox_pooling</span><span class="op">(</span><span class="va">wimids_list</span>, surv_formula <span class="op">=</span> <span class="va">cox_fit</span><span class="op">)</span></span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #949494;"># A tibble: 1 × 3</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>      hr   lci   uci</span>
-<span class="r-out co"><span class="r-pr">#&gt;</span>   <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span> <span style="color: #949494; font-style: italic;">&lt;dbl&gt;</span></span>
-<span class="r-out co"><span class="r-pr">#&gt;</span> <span style="color: #BCBCBC;">1</span> 0.733 0.410  1.31</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    term  estimate  std.error statistic      p.value  conf.low conf.high</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 treat 0.7334003 0.08794506 -3.525651 0.0004623598 0.6170148 0.8717392</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>              b       df dfcom        fmi      lambda m         riv        ubar</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 4.813004e-05 486.9941   496 0.01151869 0.007467489 5 0.007523672 0.007676578</span>
 <span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
