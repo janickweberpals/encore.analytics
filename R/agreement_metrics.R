@@ -12,6 +12,9 @@
 #' All estimates should be hazard ratios (HR) and must be positive.
 #' Estimates are log-transformed for SMD calculation.
 #'
+#' @importFrom tidyr pivot_wider pivot_longer
+#' @importFrom smd smd
+#'
 #' @param x A data.frame or tibble containing RCT and RWE results (in wide format, see examples).
 #' Must contain these columns:
 #'

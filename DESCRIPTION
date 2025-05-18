@@ -12,7 +12,6 @@ Imports:
     anesrake,
     assertthat,
     broom,
-    cardx (>= 0.2.3),
     dplyr (>= 1.0.0),
     forcats,
     ggplot2,
@@ -21,16 +20,17 @@ Imports:
     gtsummary (>= 2.0.0),
     locfit,
     MatchThem,
-    rlang (>= 0.4.0),
     stringr,
     mice,
     simsurv,
     smd,
     survival,
-    tibble
+    tibble,
+    tidyr
 Suggests: 
     testthat (>= 3.0.0),
-    survey
+    survey,
+    cardx (>= 0.2.3)
 Config/testthat/edition: 3
 RoxygenNote: 7.3.2
 URL: https://janickweberpals.github.io/encore.analytics/

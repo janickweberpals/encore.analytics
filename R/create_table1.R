@@ -11,6 +11,8 @@
 #' It is designed to create a summary table of covariates stratified by treatment group.
 #' The function requires a one-row-per-patient dataframe and creates a summary table of covariates stratified by treatment group.
 #'
+#' @importFrom smd smd
+#'
 #' @param x dataframe with individual-level patient data in a one-row-per-patient format with treatment stratification variable and covariates to be displayed in the Table 1
 #' @param covariates character vector of columns/covariate names to be displayed in Table 1
 #' @param covariates_labels named character vector or list of formulas specifying variables labels of covariate-label pairs to display in table
