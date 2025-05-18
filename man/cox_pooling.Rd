@@ -10,33 +10,37 @@ cox_pooling(
 )
 }
 \arguments{
-\item{x}{list of imputed datasets with weights or raking weights (\code{\link[encore.analytics]{raking_weights}}) and cluster (matched datasets only)}
+\item{x}{A list of imputed datasets with weights or raking weights (e.g., from \code{\link[encore.analytics]{raking_weights}})
+and optional cluster information (for matched datasets).}
 
-\item{surv_formula}{formula for the Cox proportional hazards model (default is \code{Surv(fu_itt_months, death_itt) ~ treat})}
+\item{surv_formula}{A formula for the Cox proportional hazards model (default is \code{Surv(fu_itt_months, death_itt) ~ treat}).}
 }
 \value{
-list of data frames with updated raking weights (\code{raking_weights})
+A data frame containing the pooled results, including hazard ratios, confidence intervals, and p-values.
 }
 \description{
-Function manually fits and pools results from Cox proportional hazards models using
-a list of imputed datasets.
+This function manually fits and pools results from Cox proportional hazards models using
+a list of imputed datasets. It leverages the \code{mice::as.mira} and \code{mice::pool} functions to
+ensure proper pooling of results across multiple imputations using Rubin's rules.
 }
 \details{
-The function requires an list of imputed data frames with weights and cluster (matching) information
-and a formula for the Cox proportional hazards model. The data frames must have a column names \code{weights}
-and \code{subclass} (for matched datasets to indicate the cluster membership).
+The function requires a list of imputed data frames with weights and optional cluster (matching) information,
+as well as a formula for the Cox proportional hazards model. The data frames must include a column named
+\code{weights}, and optionally a column named \code{subclass} (for matched datasets to indicate cluster membership).
 
-This is a convenience wrapper for fitting Cox models to multiple imputed datasets
-which do not come as a \code{mimids} or \code{wimids} object. This is useful when
-there are intermediate steps in the analysis pipeline, such as computing raking weights
-via \code{raking_weights} which are so far not straightforward
-to implement in a \code{mimids} or \code{wimids} object.
+This function is particularly useful when working with imputed datasets that are not in the form of
+\code{mimids} or \code{wimids} objects, such as when intermediate steps like raking weights
+(via \code{raking_weights}) are applied. It provides a flexible way to fit and pool Cox models
+while ensuring compatibility with Rubin's rules for multiple imputation.
 
-The function follows the following logic:
+The function follows these steps:
 \enumerate{
-\item Fit a Cox proportional hazards model to each imputed dataset; if a \code{subclass} column is present in the data, it is used as a cluster variable for matched pairs
-\item Pool the results using the \code{pool.scalar} function from the mice package, that is, univariate estimates (qbar) are pooled via formula (3.1.2) Rubin (1987) and the total variance (t) is estimated via robust standardard errors according to formula (3.1.5) Rubin (1987).
-\item Compute the confidence intervals and exponentiate the results via exp(qbar +/- 1.96 * sqrt(t))
+\item Fit a Cox proportional hazards model to each imputed dataset. If a \code{subclass} column is present,
+it is used as a cluster variable for matched pairs.
+\item Convert the list of fitted models into a \code{mira} object using \code{mice::as.mira}.
+\item Pool the results using \code{mice::pool}, which applies Rubin's rules for combining estimates
+and variances across imputations.
+\item Format the pooled results, including exponentiating the hazard ratios and calculating confidence intervals.
 }
 }
 \examples{
@@ -44,39 +48,39 @@ library(encore.analytics)
 library(mice)
 library(MatchThem)
 
-# simulate a cohort with 1,000 patients with 20\% missing data
+# Simulate a cohort with 500 patients and 20\% missing data
 data <- simulate_data(
- n = 500,
- imposeNA = TRUE,
- propNA = 0.2
- )
+  n = 500,
+  imposeNA = TRUE,
+  propNA = 0.2
+)
 
-# impute the data
+# Impute the data
 set.seed(42)
 mids <- mice(data, m = 5, print = FALSE)
 
-# fit a propensity score model
+# Fit a propensity score model
 fit <- as.formula(treat ~ dem_age_index_cont + dem_sex_cont + c_smoking_history)
 
-# weight (or alternatively match) patients within each imputed dataset
+# Weight patients within each imputed dataset
 wimids <- weightthem(
- formula = fit,
- datasets = mids,
- approach = "within",
- method = "glm",
- estimand = "ATO"
- )
+  formula = fit,
+  datasets = mids,
+  approach = "within",
+  method = "glm",
+  estimand = "ATO"
+)
 
-# create a list of imputed and weighted datasets
+# Create a list of imputed and weighted datasets
 wimids_list <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
 
-# fit a survival model
+# Define a survival model formula
 cox_fit <- as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
 
-# fit and pool Cox proportional hazards model results
+# Fit and pool Cox proportional hazards model results
 cox_pooling(wimids_list, surv_formula = cox_fit)
-
 }
 \seealso{
-\code{\link[survival]{coxph}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}}
+\code{\link[survival]{coxph}}, \code{\link[mice]{pool}}, \code{\link[mice]{as.mira}},
+\code{\link[MatchThem]{matchthem}}, \code{\link[MatchThem]{weightthem}}
 }

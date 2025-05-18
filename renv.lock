@@ -4400,6 +4400,39 @@
       "Repository": "https://packagemanager.posit.co/cran/latest",
       "Encoding": "UTF-8"
     },
+    "smd": {
+      "Package": "smd",
+      "Version": "0.8.0",
+      "Source": "Repository",
+      "Type": "Package",
+      "Title": "Compute Standardized Mean Differences",
+      "Authors@R": "c(person(\"Bradley\", \"Saul\", role = c(\"aut\", \"cre\"),  email = \"bradleysaul@fastmail.com\"), person(\"Alex\", \"Breskin\", role = c(\"ctb\"),  email = \"alexbreskin@gmail.com\"), person(\"Catie\", \"Wiener\", role = c(\"ctb\"),  email = \"cwiener@live.unc.edu\"), person(\"Matt\", \"Phelan\", role = c(\"ctb\"),  email = \"mpphelan1@gmail.com\"), person(\"Daniel\", \"Sjoberg\", role = c(\"ctb\"), email = \"danield.sjoberg@gmail.com\"), person(\"Nuvan\", \"Rathnayaka\", role = c(\"ctb\"), email = \"nuvanrath@proton.me\"), person(\"Malcolm\", \"Barrett\", role = c(\"ctb\"),  email = \"malcolmbarrett@gmail.com\") )",
+      "Description": "Computes standardized mean differences and confidence intervals for  multiple data types based on Yang, D., & Dalton, J. E. (2012)  <https://support.sas.com/resources/papers/proceedings12/335-2012.pdf>.",
+      "Imports": [
+        "MASS (>= 7.3-50)",
+        "methods (>= 3.5.1)"
+      ],
+      "Suggests": [
+        "testthat",
+        "stddiff",
+        "tableone",
+        "knitr",
+        "dplyr",
+        "purrr",
+        "markdown",
+        "rmarkdown"
+      ],
+      "License": "MIT + file LICENSE",
+      "URL": "https://bsaul.github.io/smd/",
+      "BugReports": "https://github.com/bsaul/smd/issues",
+      "Encoding": "UTF-8",
+      "RoxygenNote": "7.3.2",
+      "VignetteBuilder": "knitr",
+      "Repository": "CRAN",
+      "NeedsCompilation": "no",
+      "Author": "Bradley Saul [aut, cre], Alex Breskin [ctb], Catie Wiener [ctb], Matt Phelan [ctb], Daniel Sjoberg [ctb], Nuvan Rathnayaka [ctb], Malcolm Barrett [ctb]",
+      "Maintainer": "Bradley Saul <bradleysaul@fastmail.com>"
+    },
     "stringi": {
       "Package": "stringi",
       "Version": "1.8.7",
