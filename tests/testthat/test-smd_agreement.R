@@ -81,7 +81,7 @@ test_that("smd_agreement handles edge cases appropriately", {
     rwe_lower = log(0.79),
     rwe_upper = log(0.81)
   )
-  expect_equal(smd6, 0, tolerance = 1e-10)
+  expect_equal(smd4, 0, tolerance = 1e-10)
 
   # Test with identical point estimates but different CIs
   smd5 <- smd_agreement(
@@ -107,3 +107,4 @@ test_that("smd_agreement handles edge cases appropriately", {
     "RCT estimate is outside its confidence interval bounds"
   )
 })
+
