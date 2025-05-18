@@ -38,8 +38,19 @@ jobs:
             any::covr
             any::htmltools
             any::DT
+            any::renv
             local::.
           needs: website
+
+      - name: Restore renv
+        shell: Rscript {0}
+        run: |
+          if (file.exists("renv.lock")) renv::restore()
+
+      - name: Clean docs directory
+        run: |
+          if [ -d "docs" ]; then rm -rf docs; fi
+          mkdir docs
 
       - name: Generate coverage report
         run: |
@@ -47,7 +58,9 @@ jobs:
         shell: Rscript {0}
 
       - name: Build site
-        run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
+        run: |
+          pkgdown::clean_site(force = TRUE)
+          pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
         shell: Rscript {0}
 
       - name: Deploy to GitHub pages 🚀
