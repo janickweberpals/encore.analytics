@@ -31,16 +31,20 @@ jobs:
         with:
           use-public-rspm: true
 
-      - name: Test coverage
-        uses: r-lib/actions/setup-renv@v2
-        with:
-          cache-version: 1
-        run: covr::report(covr::package_coverage(), file = 'docs/coverage.html', browse = FALSE)
-
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: any::pkgdown, any::covr, any::htmltools, any::DT, local::.
+          extra-packages: |
+            any::pkgdown
+            any::covr
+            any::htmltools
+            any::DT
+            local::.
           needs: website
+
+      - name: Generate coverage report
+        run: |
+          covr::report(covr::package_coverage(), file = 'docs/coverage.html', browse = FALSE)
+        shell: Rscript {0}
 
       - name: Build site
         run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
