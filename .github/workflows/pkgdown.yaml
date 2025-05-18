@@ -31,8 +31,10 @@ jobs:
         with:
           use-public-rspm: true
 
-      - uses: r-lib/actions/setup-r-dependencies@v2
+      - name: Install R Dependencies using renv
+        uses: r-lib/actions/setup-renv@v2
         with:
+          cache-version: 1
           extra-packages: any::pkgdown, local::.
           needs: website
 
