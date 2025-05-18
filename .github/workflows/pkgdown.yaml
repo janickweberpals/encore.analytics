@@ -2,7 +2,7 @@
 # Need help debugging build failures? Start at https://github.com/r-lib/actions#where-to-find-help
 on:
   push:
-    branches: [main, master, dev]
+    branches: [main, master]
   pull_request:
   release:
     types: [published]
@@ -33,34 +33,11 @@ jobs:
 
       - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: |
-            any::pkgdown
-            any::covr
-            any::htmltools
-            any::DT
-            any::renv
-            local::.
+          extra-packages: any::pkgdown, local::.
           needs: website
 
-      - name: Restore renv
-        shell: Rscript {0}
-        run: |
-          if (file.exists("renv.lock")) renv::restore()
-
-      - name: Clean docs directory
-        run: |
-          if [ -d "docs" ]; then rm -rf docs; fi
-          mkdir docs
-
-      - name: Generate coverage report
-        run: |
-          covr::report(covr::package_coverage(), file = 'docs/coverage.html', browse = FALSE)
-        shell: Rscript {0}
-
       - name: Build site
-        run: |
-          pkgdown::clean_site(force = TRUE)
-          pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
+        run: pkgdown::build_site_github_pages(new_process = FALSE, install = FALSE)
         shell: Rscript {0}
 
       - name: Deploy to GitHub pages 🚀
