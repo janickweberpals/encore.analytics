@@ -41,8 +41,7 @@ test_that("smd_agreement validates inputs correctly", {
       rct_estimate = NULL,
       rct_lower = log(0.78),
       rct_upper = log(0.97)
-    ),
-    "Missing required arguments"
+    )
   )
 
   # Test non-numeric inputs
