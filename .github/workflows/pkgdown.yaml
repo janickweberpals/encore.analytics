@@ -35,7 +35,7 @@ jobs:
         uses: r-lib/actions/setup-renv@v2
         with:
           cache-version: 1
-          extra-packages: any::pkgdown, local::.
+          #extra-packages: any::pkgdown, local::.
           needs: website
 
       - name: Build site
