@@ -40,12 +40,12 @@
 #' For methodology on comparing RCT and RWE results using standardized differences.
 #'
 #' @export
-smd_agreement <- function(rct_estimate = NULL,
-                          rct_lower = NULL,
-                          rct_upper = NULL,
-                          rwe_estimate = NULL,
-                          rwe_lower = NULL,
-                          rwe_upper = NULL
+smd_agreement <- function(rct_estimate,
+                          rct_lower,
+                          rct_upper,
+                          rwe_estimate,
+                          rwe_lower,
+                          rwe_upper
                           ){
 
   # Input validation
