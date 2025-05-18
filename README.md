@@ -11,8 +11,7 @@
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![CRAN
 status](https://www.r-pkg.org/badges/version/encore.analytics)](https://CRAN.R-project.org/package=encore.analytics)
-[![Codecov test
-coverage](https://codecov.io/gh/janickweberpals/encore.analytics/graph/badge.svg)](https://app.codecov.io/gh/janickweberpals/encore.analytics)
+[![test-coverage](https://github.com/janickweberpals/encore.analytics/actions/workflows/test-coverage.yaml/badge.svg)](https://github.com/janickweberpals/encore.analytics/actions/workflows/test-coverage.yaml)
 <!-- badges: end -->
 
 The goal of encore.analytics is to …
