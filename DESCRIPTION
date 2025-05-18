@@ -30,7 +30,8 @@ Imports:
 Suggests: 
     testthat (>= 3.0.0),
     survey,
-    cardx (>= 0.2.3)
+    cardx (>= 0.2.3),
+    covr
 Config/testthat/edition: 3
 RoxygenNote: 7.3.2
 URL: https://janickweberpals.github.io/encore.analytics/
