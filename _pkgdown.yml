@@ -2,13 +2,32 @@ url: https://janickweberpals.github.io/encore.analytics/
 template:
   bootstrap: 5
 
+# Add this line to specify the output directory
+destination: docs
+
+articles:
+- title: Vignettes
+  desc: Package vignettes and articles
+  contents:
+  - articles/agreement_metrics
+  - articles/background
+  - articles/km_pooling
+  - articles/raking_weights
+  - articles/subgroup_analysis
+  - articles/syvcox_coxph
+
 navbar:
   structure:
     left: [intro, reference, articles, tutorials, news, reports]
     right: [search]
   components:
-   reports:
-    text: Reports
-    menu:
-    - text: Coverage report
-      href: coverage.html # covr::report(covr::package_coverage(), file = 'docs/coverage.html', browse = FALSE)
+    articles:
+      text: Articles
+      menu:
+      - text: All Articles
+        href: articles/index.html
+    reports:
+      text: Reports
+      menu:
+      - text: Coverage report
+        href: coverage.html

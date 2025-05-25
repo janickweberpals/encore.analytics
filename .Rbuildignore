@@ -10,3 +10,4 @@ sticker
 ^_pkgdown\.yml$
 ^docs$
 ^pkgdown$
+^build_website\.R$
