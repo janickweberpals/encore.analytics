@@ -31,11 +31,13 @@ substantially. Traditional approaches often handle these challenges
 separately, leading to potential biases and methodological
 inconsistencies.
 
-The `encore.analytics` package offers an integrated solution that: -
-Maintains the proper order of operations between imputation and
-propensity score estimation - Ensures consistent handling of uncertainty
-across multiple imputed datasets - Provides specialized tools for
-oncology-specific outcomes and metrics
+The `encore.analytics` package offers an integrated solution that:
+
+- Maintains the proper order of operations between imputation and
+  propensity score estimation
+- Ensures consistent handling of uncertainty across multiple imputed
+  datasets
+- Provides specialized tools for oncology-specific outcomes and metrics
 
 The package implements various methodologies for:
 
@@ -90,39 +92,17 @@ The documentation includes:
 5.  **Agreement Metrics**: Methods for assessing consistency across
     imputations
 
-## Basic Usage
-
-``` r
-library(encore.analytics)
-
-# Generate synthetic data for testing
-data <- simulate_data(n = 1000, missing_rate = 0.2)
-
-# Perform multiple imputation analysis
-results <- cox_pooling(data,
-                      time = "time",
-                      event = "event",
-                      exposure = "treatment",
-                      covariates = c("age", "sex", "stage"))
-
-# Visualize pooled Kaplan-Meier curves
-km <- km_pooling(data,
-                 time = "time",
-                 event = "event",
-                 group = "treatment")
-plot(km)
-```
-
 ## Implementation Details
 
 ### Statistical Methodology
 
-The package implements state-of-the-art approaches for: - Rubin’s rules
-for combining estimates across imputed datasets - Various propensity
-score estimation methods including logistic regression and machine
-learning approaches - Specialized pooling methods for survival
-analyses - Novel metrics for assessing agreement between imputed
-datasets
+The package implements state-of-the-art approaches for:
+
+- Rubin’s rules for combining estimates across imputed datasets
+- Various propensity score estimation methods including logistic
+  regression and machine learning approaches
+- Specialized pooling methods for survival analyses
+- Novel metrics for assessing agreement between imputed datasets
 
 ### Technical Architecture
 
@@ -131,18 +111,6 @@ modular design that allows for easy addition of new methodologies -
 Efficient handling of large datasets through optimized algorithms -
 Comprehensive unit testing to ensure reliability - Integration with
 popular R packages in the survival analysis ecosystem
-
-## Dependencies
-
-The package dependencies are managed through the `renv` package to
-ensure reproducibility. After installation, all required packages will
-be automatically installed with the correct versions. Key dependencies
-include:
-
-- `survival`: For core survival analysis functionality
-- `mice`: For multiple imputation methods
-- `survey`: For complex survey designs and weighted analyses
-- `ggplot2`: For visualization capabilities
 
 ## Contributing
 

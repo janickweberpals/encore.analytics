@@ -625,10 +625,15 @@ substantially. Traditional approaches often handle these challenges
 separately, leading to potential biases and methodological
 inconsistencies.</p>
 <p>The <code>encore.analytics</code> package offers an integrated
-solution that: - Maintains the proper order of operations between
-imputation and propensity score estimation - Ensures consistent handling
-of uncertainty across multiple imputed datasets - Provides specialized
-tools for oncology-specific outcomes and metrics</p>
+solution that:</p>
+<ul>
+<li>Maintains the proper order of operations between imputation and
+propensity score estimation</li>
+<li>Ensures consistent handling of uncertainty across multiple imputed
+datasets</li>
+<li>Provides specialized tools for oncology-specific outcomes and
+metrics</li>
+</ul>
 <p>The package implements various methodologies for:</p>
 <ul>
 <li>Multiple imputation of missing data</li>
@@ -678,33 +683,16 @@ survival curves</li>
 <li><strong>Agreement Metrics</strong>: Methods for assessing
 consistency across imputations</li>
 </ol>
-<h2 id="basic-usage">Basic Usage</h2>
-<div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a><span class="fu">library</span>(encore.analytics)</span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a></span>
-<span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a><span class="co"># Generate synthetic data for testing</span></span>
-<span id="cb2-4"><a href="#cb2-4" tabindex="-1"></a>data <span class="ot">&lt;-</span> <span class="fu">simulate_data</span>(<span class="at">n =</span> <span class="dv">1000</span>, <span class="at">missing_rate =</span> <span class="fl">0.2</span>)</span>
-<span id="cb2-5"><a href="#cb2-5" tabindex="-1"></a></span>
-<span id="cb2-6"><a href="#cb2-6" tabindex="-1"></a><span class="co"># Perform multiple imputation analysis</span></span>
-<span id="cb2-7"><a href="#cb2-7" tabindex="-1"></a>results <span class="ot">&lt;-</span> <span class="fu">cox_pooling</span>(data,</span>
-<span id="cb2-8"><a href="#cb2-8" tabindex="-1"></a>                      <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb2-9"><a href="#cb2-9" tabindex="-1"></a>                      <span class="at">event =</span> <span class="st">&quot;event&quot;</span>,</span>
-<span id="cb2-10"><a href="#cb2-10" tabindex="-1"></a>                      <span class="at">exposure =</span> <span class="st">&quot;treatment&quot;</span>,</span>
-<span id="cb2-11"><a href="#cb2-11" tabindex="-1"></a>                      <span class="at">covariates =</span> <span class="fu">c</span>(<span class="st">&quot;age&quot;</span>, <span class="st">&quot;sex&quot;</span>, <span class="st">&quot;stage&quot;</span>))</span>
-<span id="cb2-12"><a href="#cb2-12" tabindex="-1"></a></span>
-<span id="cb2-13"><a href="#cb2-13" tabindex="-1"></a><span class="co"># Visualize pooled Kaplan-Meier curves</span></span>
-<span id="cb2-14"><a href="#cb2-14" tabindex="-1"></a>km <span class="ot">&lt;-</span> <span class="fu">km_pooling</span>(data,</span>
-<span id="cb2-15"><a href="#cb2-15" tabindex="-1"></a>                 <span class="at">time =</span> <span class="st">&quot;time&quot;</span>,</span>
-<span id="cb2-16"><a href="#cb2-16" tabindex="-1"></a>                 <span class="at">event =</span> <span class="st">&quot;event&quot;</span>,</span>
-<span id="cb2-17"><a href="#cb2-17" tabindex="-1"></a>                 <span class="at">group =</span> <span class="st">&quot;treatment&quot;</span>)</span>
-<span id="cb2-18"><a href="#cb2-18" tabindex="-1"></a><span class="fu">plot</span>(km)</span></code></pre></div>
 <h2 id="implementation-details">Implementation Details</h2>
 <h3 id="statistical-methodology">Statistical Methodology</h3>
-<p>The package implements state-of-the-art approaches for: - Rubin’s
-rules for combining estimates across imputed datasets - Various
-propensity score estimation methods including logistic regression and
-machine learning approaches - Specialized pooling methods for survival
-analyses - Novel metrics for assessing agreement between imputed
-datasets</p>
+<p>The package implements state-of-the-art approaches for:</p>
+<ul>
+<li>Rubin’s rules for combining estimates across imputed datasets</li>
+<li>Various propensity score estimation methods including logistic
+regression and machine learning approaches</li>
+<li>Specialized pooling methods for survival analyses</li>
+<li>Novel metrics for assessing agreement between imputed datasets</li>
+</ul>
 <h3 id="technical-architecture">Technical Architecture</h3>
 <p>Built with extensibility in mind, <code>encore.analytics</code>
 features: - A modular design that allows for easy addition of new
@@ -712,18 +700,6 @@ methodologies - Efficient handling of large datasets through optimized
 algorithms - Comprehensive unit testing to ensure reliability -
 Integration with popular R packages in the survival analysis
 ecosystem</p>
-<h2 id="dependencies">Dependencies</h2>
-<p>The package dependencies are managed through the <code>renv</code>
-package to ensure reproducibility. After installation, all required
-packages will be automatically installed with the correct versions. Key
-dependencies include:</p>
-<ul>
-<li><code>survival</code>: For core survival analysis functionality</li>
-<li><code>mice</code>: For multiple imputation methods</li>
-<li><code>survey</code>: For complex survey designs and weighted
-analyses</li>
-<li><code>ggplot2</code>: For visualization capabilities</li>
-</ul>
 <h2 id="contributing">Contributing</h2>
 <p>Contributions are welcome! Please feel free to submit a Pull Request.
 For major changes, please open an issue first to discuss what you would

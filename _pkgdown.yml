@@ -31,5 +31,6 @@ navbar:
     reports:
       text: Reports
       menu:
-      - text: Coverage report
+      - text: Coverage report # covr::report(covr::package_coverage(), file = 'docs/coverage.html', browse = FALSE)
         href: coverage.html
+        target: _blank
