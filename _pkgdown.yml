@@ -2,13 +2,35 @@ url: https://janickweberpals.github.io/encore.analytics/
 template:
   bootstrap: 5
 
+# Add this line to specify the output directory
+destination: docs
+
 navbar:
   structure:
     left: [intro, reference, articles, tutorials, news, reports]
     right: [search]
   components:
-   reports:
-    text: Reports
-    menu:
-    - text: Coverage report
-      href: coverage.html # covr::report(covr::package_coverage(), file = 'docs/coverage.html', browse = FALSE)
+    articles:
+      text: Articles
+      menu:
+      - text: "Background"
+        href: https://janickweberpals.github.io/imputation-ps-workflows/chapters/background.html
+        target: _blank
+      - text: "Multiple Imputation and Propensity Score Matching in a Survival Analysis Context"
+        href: https://janickweberpals.github.io/imputation-ps-workflows/chapters/syvcox_coxph.html
+        target: _blank
+      - text: "Incorporating Raking Weights"
+        href: https://janickweberpals.github.io/imputation-ps-workflows/chapters/raking_weights.html
+        target: _blank
+      - text: "Pooling of Kaplan-Meier Curves after Multiple Imputation and Propensity Score Weighting"
+        href: https://janickweberpals.github.io/imputation-ps-workflows/chapters/km_pooling.html
+        target: _blank
+      - text: "Computation of Agreement Metrics"
+        href: https://janickweberpals.github.io/imputation-ps-workflows/chapters/agreement_metrics.html
+        target: _blank
+    reports:
+      text: Reports
+      menu:
+      - text: Coverage report # covr::report(covr::package_coverage(), file = 'docs/coverage.html', browse = FALSE)
+        href: coverage.html
+        target: _blank

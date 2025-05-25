@@ -10,3 +10,5 @@ sticker
 ^_pkgdown\.yml$
 ^docs$
 ^pkgdown$
+^README\.html$
+^codecov\.yml$
