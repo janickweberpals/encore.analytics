@@ -6,11 +6,8 @@
 <!-- badges: start -->
 
 [![R-CMD-check](https://github.com/janickweberpals/encore.analytics/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/janickweberpals/encore.analytics/actions/workflows/R-CMD-check.yaml)
-[![pkgdown](https://github.com/janickweberpals/encore.analytics/workflows/pkgdown/badge.svg)](https://github.com/janickweberpals/encore.analytics/actions/workflows/pkgdown.yaml)
 [![Lifecycle:
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
-[![CRAN
-status](https://www.r-pkg.org/badges/version/encore.analytics)](https://CRAN.R-project.org/package=encore.analytics)
 <!-- badges: end -->
 
 ## Overview
