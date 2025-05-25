@@ -1,0 +1,8 @@
+pandoc: 3.7.0.1
+pkgdown: 2.1.1
+pkgdown_sha: ~
+articles: {}
+last_built: 2025-05-25T14:41Z
+urls:
+  reference: https://janickweberpals.github.io/encore.analytics/reference
+  article: https://janickweberpals.github.io/encore.analytics/articles
