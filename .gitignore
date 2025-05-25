@@ -15,6 +15,4 @@ inst/doc
 
 # for now we do local builds until we figure out a way to continuously deploy it on GitLab
 # docs
-/doc/
 /Meta/
-docs
