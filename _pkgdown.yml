@@ -5,17 +5,6 @@ template:
 # Add this line to specify the output directory
 destination: docs
 
-articles:
-- title: Vignettes
-  desc: Package vignettes and articles
-  contents:
-  - articles/agreement_metrics
-  - articles/background
-  - articles/km_pooling
-  - articles/raking_weights
-  - articles/subgroup_analysis
-  - articles/syvcox_coxph
-
 navbar:
   structure:
     left: [intro, reference, articles, tutorials, news, reports]
@@ -24,8 +13,21 @@ navbar:
     articles:
       text: Articles
       menu:
-      - text: All Articles
-        href: articles/index.html
+      - text: "Background"
+        href: https://janickweberpals.github.io/imputation-ps-workflows/chapters/background.html
+        target: _blank
+      - text: "Multiple Imputation and Propensity Score Matching in a Survival Analysis Context"
+        href: https://janickweberpals.github.io/imputation-ps-workflows/chapters/syvcox_coxph.html
+        target: _blank
+      - text: "Incorporating Raking Weights"
+        href: https://janickweberpals.github.io/imputation-ps-workflows/chapters/raking_weights.html
+        target: _blank
+      - text: "Pooling of Kaplan-Meier Curves after Multiple Imputation and Propensity Score Weighting"
+        href: https://janickweberpals.github.io/imputation-ps-workflows/chapters/km_pooling.html
+        target: _blank
+      - text: "Computation of Agreement Metrics"
+        href: https://janickweberpals.github.io/imputation-ps-workflows/chapters/agreement_metrics.html
+        target: _blank
     reports:
       text: Reports
       menu:
