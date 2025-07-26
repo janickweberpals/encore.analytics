@@ -18,6 +18,7 @@
 #' @param include_id logical, include a generated patientid variable
 #' @param imposeNA logical, set covariates to missing
 #' @param propNA numeric, proportion of missingness, needs to be between 0 and 1
+
 #'
 #' @return data frame with simulated analytic cohort
 #'
@@ -27,7 +28,8 @@
 #' \dontrun{
 #' library(encore.analytics)
 #'
-#' data_miss <- simulate_data(
+#' # Original uniform missingness
+#' data_uniform <- simulate_data(
 #'   n_total = 3500,
 #'   seed = 41,
 #'   include_id = FALSE,
@@ -35,7 +37,16 @@
 #'   propNA = .33
 #'   )
 #'
-#' head(data_miss)
+#' # Now creates variable missingness across columns with average of 0.33
+#' data_variable <- simulate_data(
+#'   n_total = 3500,
+#'   seed = 41,
+#'   include_id = FALSE,
+#'   imposeNA = TRUE,
+#'   propNA = .33
+#'   )
+#'
+#' head(data_variable)
 #'
 #'}
 
@@ -52,6 +63,7 @@ simulate_data <- function(n_total = 3500,
   assertthat::assert_that(inherits(seed, "numeric"), msg = "<seed> needs to be an integer")
   assertthat::assert_that(inherits(include_id, "logical"), msg = "<seed> needs to be a logical")
   assertthat::assert_that(inherits(imposeNA, "logical"), msg = "<imposeNA> needs to be a logical")
+  if(isTRUE(imposeNA) && is.null(propNA)){stop("<propNA> needs to be specified when <imposeNA> is TRUE")}
   if(!is.null(propNA)) assertthat::assert_that(inherits(propNA, "numeric"), msg = "<propNA> needs to be numeric")
   if(!is.null(propNA)) assertthat::assert_that(propNA >= 0 & propNA <= 1, msg = "<propNA> needs to be a numeric between 0 and 1")
   if(!is.null(propNA)) assertthat::assert_that(imposeNA == TRUE, msg = "<propNA> is specified but imposeNA is FALSE")
@@ -174,9 +186,9 @@ simulate_data <- function(n_total = 3500,
             c_ast_alt_ratio_cont * log(1.0756) +
             c_stage_initial_dx_cont * log(1.2177) +
             c_time_dx_to_index * log(1.0001)
+          )
         )
       )
-    )
 
   #summary(cohort$treat)
 
@@ -206,12 +218,12 @@ simulate_data <- function(n_total = 3500,
         x = cohort_Asian, # data frame with covariates
         maxt = 120
         )
-    ) |>
+      ) |>
     dplyr::select(-id) |>
     dplyr::rename(
       fu_itt_months = eventtime,
       death_itt = status
-    )
+      )
 
   ## Non-Asian patients
   cohort_nonAsian <- cohort |>
@@ -235,13 +247,13 @@ simulate_data <- function(n_total = 3500,
         betas = betas_os_nonAsian,
         x = cohort_nonAsian,
         maxt = 120
-      )
-    ) |>
+        )
+      ) |>
     dplyr::select(-id) |>
     dplyr::rename(
       fu_itt_months = eventtime,
       death_itt = status
-    )
+      )
 
   # combine Asian and non-Asian
   cohort_outcome <- rbind(cohort_outcome_Asian, cohort_outcome_nonAsian)
@@ -254,27 +266,59 @@ simulate_data <- function(n_total = 3500,
 
   if(imposeNA){
 
+    # variables that should always stay complete
     varComplete <-  c("patientid", "treat", "c_year_index", "fu_itt_months", "death_itt", "dem_age_index_cont", "dem_sex_cont")
     varNA <- setdiff(names(cohort_outcome), varComplete)
 
-    # define column numbers for pattern and weight determination
-    colsNA <- which(colnames(cohort_outcome) %in% varNA)
-
-    # define missingness pattern
-    default_pattern <- rep(1, ncol(cohort_outcome))
-    pattern <- replace(default_pattern, colsNA, 0)
-
+    # Create variable missingness proportions per column with average = propNA
     set.seed(seed)
-    cohort_outcome <- mice::ampute(
-      data = cohort_outcome,
-      prop = propNA,
-      patterns = pattern,
-      mech = "MCAR"
-      )$amp
+    n_vars_with_missing <- length(varNA)
 
-  }
+    # Safety check - ensure we have variables to make missing
+    if(n_vars_with_missing == 0){
+      # No variables to make missing, skip missingness
+      return(cohort_outcome)
+      }
+
+    # Generate proportions that average to propNA using a simpler approach
+    # Start with uniform random values and scale them
+    base_props <- stats::runif(n_vars_with_missing, min = 0.1, max = 0.9)
+
+    # Scale to have the desired mean
+    current_mean <- mean(base_props)
+    var_proportions <- base_props * (propNA / current_mean)
+
+    # Apply adaptive bounds based on target propNA
+    min_bound <- max(0.01, propNA - 0.3)  # Allow lower bound to be closer to target
+    max_bound <- min(0.99, propNA + 0.3)  # Allow upper bound to accommodate high targets
+    var_proportions <- pmax(min_bound, pmin(max_bound, var_proportions))
+
+    # Final adjustment to ensure mean equals propNA
+    current_mean <- mean(var_proportions)
+    if(length(current_mean) > 0 && !is.na(current_mean) && abs(current_mean - propNA) > 0.001) {
+      adjustment_factor <- propNA / current_mean
+      var_proportions <- var_proportions * adjustment_factor
+      var_proportions <- pmax(min_bound, pmin(max_bound, var_proportions))
+      }
+
+    # Apply missingness column by column
+    set.seed(seed)
+    for(i in seq_along(varNA)) {
+      var_name <- varNA[i]
+      prop_missing <- var_proportions[i]
+
+      # Skip if proportion is NA or invalid
+      if(is.na(prop_missing) || prop_missing <= 0) next
+
+      # Randomly select rows to set as missing
+      n_missing <- round(n_total * prop_missing)
+      if(n_missing > 0) {
+        missing_rows <- sample(1:n_total, n_missing, replace = FALSE)
+        cohort_outcome[missing_rows, var_name] <- NA
+        }
+      }
+    }
 
   return(cohort_outcome)
 
 }
-
