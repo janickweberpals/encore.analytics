@@ -5,20 +5,20 @@ globalVariables(c(
   "RCT", "RWE", "significance_agreement", "estimate_agreement",
   "smd_agreement", "smd_value", "rct_estimate", "rct_lower", "rct_upper",
   "rwe_estimate", "rwe_lower", "rwe_upper", "where",
-  
+
   # cox_pooling variables
   "weights", "subclass",
-  
+
   # create_table1 variables
   "conf.low",
-  
+
   # km_pooling variables
   "strata", "time", "u", "qbar", "se", "desc", "surv",
   "lower", "upper", "std.err",
-  
+
   # raking_weights variables
   "caseid",
-  
+
   # simulate_data variables
   "dem_age_index_cont", "dem_sex_cont", "c_smoking_history",
   "c_number_met_sites", "c_hemoglobin_g_dl_cont",
@@ -32,5 +32,13 @@ globalVariables(c(
   "c_ecog_cont", "c_neutrophil_lymphocyte_ratio_cont", "c_bmi_cont",
   "c_ast_alt_ratio_cont", "c_stage_initial_dx_cont",
   "c_time_dx_to_index", "dem_race", "id", "eventtime", "status",
-  "patientid"
+  "patientid",
+
+  # design diagram
+  "min_time", "max_time", "is_index_point", "dimension",
+  "min_time_adj", "max_time_adj", "dimension_letter",
+  "y_pos", "color", "superscript_letter", "time_window",
+  "box_width", "text_width_estimate", "should_place_left",
+  "text_fits", "mid_time", "text_x", "label_text",
+  "text_hjust", "variable", "label", "variables"
 ))

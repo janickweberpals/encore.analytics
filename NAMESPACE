@@ -3,6 +3,7 @@
 export(agreement_metrics)
 export(cox_pooling)
 export(create_table1)
+export(design_diagram)
 export(km_pooling)
 export(raking_weights)
 export(simulate_data)

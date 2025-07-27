@@ -43,7 +43,8 @@ include a patient id variable.
 \dontrun{
 library(encore.analytics)
 
-data_miss <- simulate_data(
+# Original uniform missingness
+data_uniform <- simulate_data(
   n_total = 3500,
   seed = 41,
   include_id = FALSE,
@@ -51,7 +52,16 @@ data_miss <- simulate_data(
   propNA = .33
   )
 
-head(data_miss)
+# Now creates variable missingness across columns with average of 0.33
+data_variable <- simulate_data(
+  n_total = 3500,
+  seed = 41,
+  include_id = FALSE,
+  imposeNA = TRUE,
+  propNA = .33
+  )
+
+head(data_variable)
 
 }
 }
