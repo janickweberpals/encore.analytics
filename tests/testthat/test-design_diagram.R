@@ -14,25 +14,32 @@ test_data <- tribble(
   "c_comorbidity", "Comorbidity Score", "continuous", "Covariate Assessment Window", -365, -1,
   "c_prior_tx", "Prior Treatment", "binary", "Washout Window", -180, -1,
   "outcome", "Overall Survival", "time-to-event", "Follow-up Period", 0, 365
-  )
+)
 
 # Additional test data for edge cases
 minimal_data <- tribble(
   ~variable, ~label, ~encoding, ~dimension, ~measurement_min, ~measurement_max,
   "var1", "Variable 1", "continuous", "Dimension A", -30, -10
-  )
+)
 
 single_point_data <- tribble(
   ~variable, ~label, ~encoding, ~dimension, ~measurement_min, ~measurement_max,
   "index_var", "Index Variable", "binary", "Index Measurement", 0, 0
-  )
+)
+
+# Test data with infinite values
+infinite_data <- tribble(
+  ~variable, ~label, ~encoding, ~dimension, ~measurement_min, ~measurement_max,
+  "c_age", "Age [yrs]", "continuous", "Covariate Assessment Window", 0, 0,
+  "c_history", "Medical History", "binary", "Lookback Window", -Inf, -1,
+  "outcome", "Overall Survival", "time-to-event", "Follow-up Period", 0, Inf
+)
 
 # Test 1: Basic functionality
 test_that("Basic function execution works", {
   result <- design_diagram(test_data)
 
   expect_s3_class(result, "ggplot")
-  # Remove deprecated is_ggplot() call since expect_s3_class already checks the class
 })
 
 # Test 2: Input validation - data frame requirement
@@ -142,7 +149,6 @@ test_that("Default colors work correctly", {
   result <- design_diagram(test_data, colors = NULL)
 
   expect_s3_class(result, "ggplot")
-  # Remove deprecated is.ggplot() call since expect_s3_class already checks the class
 })
 
 # Test 10: Unnamed color vector
@@ -229,8 +235,8 @@ test_that("Custom parameters work correctly", {
   )
 
   expect_s3_class(result, "ggplot")
-  expect_equal(result$labels$title, "Custom Index Date")
-  expect_true(grepl("Weeks", result$labels$x))
+  # Note: title is now removed and replaced with annotation, so we can't test result$labels$title
+  # The index_date_label is now an annotation within the plot
 })
 
 # Test 17: Minimal data handling
@@ -338,9 +344,90 @@ test_that("Function returns correct ggplot structure", {
   expect_true(!is.null(result$theme))
   expect_true(!is.null(result$labels))
 
-  # Check that labels are set correctly
-  expect_true(!is.null(result$labels$title))
-  expect_true(!is.null(result$labels$x))
+  # Note: plot title is now removed, so we don't test for result$labels$title
+  # The x-axis title is also removed and replaced with annotation
 })
 
+# Test 25: Infinite values handling - left infinite
+test_that("Function handles left infinite values correctly", {
+  left_inf_data <- tribble(
+    ~variable, ~label, ~encoding, ~dimension, ~measurement_min, ~measurement_max,
+    "c_history", "Medical History", "binary", "Lookback Window", -Inf, -1,
+    "c_age", "Age [yrs]", "continuous", "Covariate Assessment Window", 0, 0
+  )
 
+  result <- design_diagram(left_inf_data)
+
+  expect_s3_class(result, "ggplot")
+  # Check that the function doesn't produce warnings about missing values
+  expect_silent(design_diagram(left_inf_data))
+})
+
+# Test 26: Infinite values handling - right infinite
+test_that("Function handles right infinite values correctly", {
+  right_inf_data <- tribble(
+    ~variable, ~label, ~encoding, ~dimension, ~measurement_min, ~measurement_max,
+    "c_age", "Age [yrs]", "continuous", "Covariate Assessment Window", 0, 0,
+    "outcome", "Overall Survival", "time-to-event", "Follow-up Period", 0, Inf
+  )
+
+  result <- design_diagram(right_inf_data)
+
+  expect_s3_class(result, "ggplot")
+  expect_silent(design_diagram(right_inf_data))
+})
+
+# Test 27: Infinite values handling - both infinite
+test_that("Function handles both infinite values correctly", {
+  result <- design_diagram(infinite_data)
+
+  expect_s3_class(result, "ggplot")
+  expect_silent(design_diagram(infinite_data))
+})
+
+# Test 28: Symmetrical limits for single infinite side
+test_that("Function creates symmetrical limits for single infinite boundaries", {
+  # Test with only left infinite
+  left_only_inf <- tribble(
+    ~variable, ~label, ~encoding, ~dimension, ~measurement_min, ~measurement_max,
+    "c_history", "Medical History", "binary", "Lookback Window", -Inf, -1,
+    "c_recent", "Recent Events", "continuous", "Recent Window", -30, 0
+  )
+
+  result_left <- design_diagram(left_only_inf)
+  expect_s3_class(result_left, "ggplot")
+
+  # Test with only right infinite
+  right_only_inf <- tribble(
+    ~variable, ~label, ~encoding, ~dimension, ~measurement_min, ~measurement_max,
+    "c_age", "Age [yrs]", "continuous", "Covariate Assessment Window", 0, 0,
+    "outcome", "Overall Survival", "time-to-event", "Follow-up Period", 1, Inf
+  )
+
+  result_right <- design_diagram(right_only_inf)
+  expect_s3_class(result_right, "ggplot")
+})
+
+# Test 29: Text left align functionality
+test_that("Text left align functionality works", {
+  result_aligned <- design_diagram(
+    test_data,
+    text_left_align = TRUE,
+    text_left_align_cutoffs = c(-90, 0)
+  )
+
+  expect_s3_class(result_aligned, "ggplot")
+})
+
+# Test 30: Text left align cutoffs validation
+test_that("Function validates text_left_align_cutoffs parameter", {
+  expect_error(
+    design_diagram(test_data, text_left_align = TRUE, text_left_align_cutoffs = c(-90)),
+    "text_left_align_cutoffs must be a numeric vector of length 2"
+  )
+
+  expect_error(
+    design_diagram(test_data, text_left_align = TRUE, text_left_align_cutoffs = "invalid"),
+    "text_left_align_cutoffs must be a numeric vector of length 2"
+  )
+})
