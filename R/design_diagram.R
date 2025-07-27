@@ -4,6 +4,7 @@
 #' Creates a ggplot2-based study design diagram showing measurement windows
 #' relative to an index date (cohort entry). Based on principles from
 #' Schneeweiss et al. (2019) Ann Intern Med.
+#' [![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 #'
 #' @param data A data.frame/tibble with study design parameters
 #' @param variable_col Column name containing variable names (default: "variable")
@@ -20,8 +21,12 @@
 #'   - NULL (default): uses RColorBrewer Set3 palette
 #'   - Unnamed character vector: colors assigned to dimensions in order of appearance
 #'   - Named character vector/list: dimension names as keys, colors as values
+#' @param text_left_align If TRUE, left-aligns text for index point measurements; useful when measurements window are too small to fit large text elements (default: FALSE)
+#' @param text_left_align_cutoffs Numeric vector of length 2 specifying cutoffs for left alignment (default: c(-90, 0)). If text_left_align is TRUE, text will be left-aligned for measurements with min_time >= -90 and max_time <= 0.
 #'
 #' @return A ggplot2 object
+#'
+#' @export
 #'
 #' @references
 #' Schneeweiss S, Rassen JA, Brown JS, Rothman KJ, Happe L, Arlett P, Dal Pan G, Goettsch W, Murk W, Wang SV.
@@ -57,7 +62,6 @@
 #'
 #' design_diagram(params, colors = custom_colors)
 #'}
-#' @export
 design_diagram <- function(data,
                            variable_col = "variable",
                            label_col = "label",

@@ -16,7 +16,9 @@ design_diagram(
   show_variables_legend = TRUE,
   box_height = 0.6,
   text_size = 16,
-  colors = NULL
+  colors = NULL,
+  text_left_align = FALSE,
+  text_left_align_cutoffs = c(-90, 0)
 )
 }
 \arguments{
@@ -26,7 +28,7 @@ design_diagram(
 
 \item{label_col}{Column name containing variable labels (default: "label")}
 
-\item{dimension_col}{Column name containing dimension names (default: "dimension")}
+\item{dimension_col}{Column name containing dimension (= Covariate ascertainment window, Washout Window, Eligibility Assessment Window, etc.) names (default: "dimension")}
 
 \item{min_col}{Column name containing measurement window start (default: "measurement_min")}
 
@@ -46,6 +48,10 @@ design_diagram(
 - NULL (default): uses RColorBrewer Set3 palette
 - Unnamed character vector: colors assigned to dimensions in order of appearance
 - Named character vector/list: dimension names as keys, colors as values}
+
+\item{text_left_align}{If TRUE, left-aligns text for index point measurements; useful when measurements window are too small to fit large text elements (default: FALSE)}
+
+\item{text_left_align_cutoffs}{Numeric vector of length 2 specifying cutoffs for left alignment (default: c(-90, 0)). If text_left_align is TRUE, text will be left-aligned for measurements with min_time >= -90 and max_time <= 0.}
 }
 \value{
 A ggplot2 object
@@ -54,6 +60,7 @@ A ggplot2 object
 Creates a ggplot2-based study design diagram showing measurement windows
 relative to an index date (cohort entry). Based on principles from
 Schneeweiss et al. (2019) Ann Intern Med.
+[![Lifecycle: experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 }
 \examples{
 \dontrun{
