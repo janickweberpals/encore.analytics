@@ -76,7 +76,7 @@ design_diagram <- function(data,
                            colors = NULL,
                            text_left_align = FALSE,
                            text_left_align_cutoffs = c(-90, 0)
-                           ){
+){
 
   # input checks
 
@@ -88,7 +88,7 @@ design_diagram <- function(data,
     is.character(variable_col), is.character(label_col),
     is.character(dimension_col), is.character(min_col), is.character(max_col),
     msg = "Column name parameters must be character strings"
-    )
+  )
 
   # required columns must be present
   required_cols <- c(variable_col, label_col, dimension_col, min_col, max_col)
@@ -99,33 +99,33 @@ design_diagram <- function(data,
     is.character(index_date_label), length(index_date_label) == 1,
     is.character(time_unit), length(time_unit) == 1,
     msg = "Label parameters must be character strings"
-    )
+  )
 
   # title and subtitle must be character strings
   assertthat::assert_that(
     is.numeric(box_height), box_height > 0, box_height <= 1,
     msg = "box_height must be numeric between 0 and 1"
-    )
+  )
 
   # text size must be a positive number
   assertthat::assert_that(
     is.numeric(text_size), text_size > 0,
     msg = "text_size must be a positive number"
-    )
+  )
 
   # text_left_align_cutoffs must be a numeric vector of length 2
   assertthat::assert_that(
     is.numeric(text_left_align_cutoffs) && length(text_left_align_cutoffs) == 2,
     msg = "text_left_align_cutoffs must be a numeric vector of length 2"
-    )
+  )
 
   # if text_left_align is TRUE, text_left_align_cutoffs must be specified
   if(text_left_align){
     assertthat::assert_that(
       is.numeric(text_left_align_cutoffs) && length(text_left_align_cutoffs) == 2,
       msg = "text_left_align_cutoffs must be a numeric vector of length 2"
-      )
-    }
+    )
+  }
 
   # Standardize column names for processing
   plot_data <- data |>
@@ -135,14 +135,14 @@ design_diagram <- function(data,
       dimension = dplyr::all_of(dimension_col),
       min_time = dplyr::all_of(min_col),
       max_time = dplyr::all_of(max_col)
-      ) |>
+    ) |>
     # Identify point-in-time measurements at index date
     dplyr::mutate(
       is_index_point = (min_time == 0 & max_time == 0),
       # For index point measurements, create small rectangle overlay
       min_time_adj = ifelse(is_index_point, 0, min_time),
       max_time_adj = ifelse(is_index_point, 0, max_time)
-      )
+    )
 
   # Get unique dimensions and assign colors
   dimensions <- unique(plot_data$dimension)
@@ -152,11 +152,11 @@ design_diagram <- function(data,
     # Use default color palette
     if (n_dimensions <= 3) {
       colors <- RColorBrewer::brewer.pal(max(3, n_dimensions), "Set3")[1:n_dimensions]
-      } else if (n_dimensions <= 8) {
-        colors <- RColorBrewer::brewer.pal(n_dimensions, "Set3")
-        } else {
-          colors <- grDevices::rainbow(n_dimensions, alpha = 0.7)
-          }
+    } else if (n_dimensions <= 8) {
+      colors <- RColorBrewer::brewer.pal(n_dimensions, "Set3")
+    } else {
+      colors <- grDevices::rainbow(n_dimensions, alpha = 0.7)
+    }
     # Create color mapping with default colors
     color_mapping <- stats::setNames(colors, dimensions)
   } else if (is.character(colors) && is.null(names(colors))) {
@@ -185,31 +185,37 @@ design_diagram <- function(data,
       window_id = paste(dimension, min_time_adj, max_time_adj, sep = "_"),
       # Assign unique letters to each dimension-window combination
       dimension_letter = letters[dplyr::row_number()]
-      ) |>
+    ) |>
     # Reorder by dimension_letter (ascending alphabetical order) for y-positioning
     dplyr::arrange(dimension_letter) |>
     dplyr::mutate(
       y_pos = (max(dplyr::row_number()) - dplyr::row_number()) * 0.8 + 1  # Reverse order so 'a' is at top
-      )
+    )
 
   # Join position and color data
   plot_data <- plot_data |>
     dplyr::left_join(
       unique_windows |> dplyr::select(dimension, min_time_adj, max_time_adj, y_pos, dimension_letter),
       by = c("dimension", "min_time_adj", "max_time_adj")
-      ) |>
+    ) |>
     dplyr::left_join(
       data.frame(dimension = names(color_mapping), color = as.character(color_mapping), stringsAsFactors = FALSE),
       by = "dimension"
-      ) |>
+    ) |>
     dplyr::mutate(
       dimension_label = paste0(dimension, "^", dimension_letter)
-      )
+    )
 
   # Calculate plot range with padding
   time_range <- range(c(plot_data$min_time_adj, plot_data$max_time_adj), na.rm = TRUE)
   time_padding <- diff(time_range) * 0.1
   x_limits <- c(time_range[1] - time_padding, time_range[2] + time_padding)
+
+  # Calculate the y position for the index date label (above the highest box)
+  max_y_pos <- max(unique_windows$y_pos)
+  min_y_pos <- min(unique_windows$y_pos)
+  index_label_y <- max_y_pos + box_height/2 + 0.8  # Well above the highest box
+  x_axis_label_y <- min_y_pos - box_height/2 - 0.8  # Well below the lowest box and timeline
 
   # Create the base plot
   p <- ggplot2::ggplot(plot_data) +
@@ -220,11 +226,11 @@ design_diagram <- function(data,
         xmax = max_time_adj,
         ymin = y_pos - box_height/2, ymax = y_pos + box_height/2,
         fill = dimension
-        ),
+      ),
       alpha = 0.7,
       color = "black",
       linewidth = 0.5
-      )
+    )
 
   # Add dimension labels inside boxes with superscript for non-index measurements (only if they exist)
   non_index_data <- plot_data |> dplyr::filter(!is_index_point)
@@ -239,7 +245,7 @@ design_diagram <- function(data,
             max_time = max(max_time_adj),
             n_vars = dplyr::n(),
             .groups = "drop"
-            ) |>
+          ) |>
           dplyr::mutate(
             mid_time = (min_time + max_time) / 2,
             box_width = max_time - min_time,
@@ -247,7 +253,7 @@ design_diagram <- function(data,
               min_time == max_time,
               paste0("[", min_time, "]"),
               paste0("[", min_time, " to ", max_time, "]")
-              ),
+            ),
             # Use Unicode superscript characters instead of R expressions
             superscript_letter = dplyr::case_when(
               dimension_letter == "a" ~ "\u1d43",
@@ -267,16 +273,16 @@ design_diagram <- function(data,
             # Position text: if min_time >= -90 AND max_time <= 0, place to the left; otherwise use fit logic
             should_place_left = min_time >= text_left_align_cutoffs[1] & max_time <= text_left_align_cutoffs[2],
             text_x = ifelse(should_place_left & text_left_align, min_time - 0.5,
-                           ifelse(text_fits, mid_time, min_time - 0.5)),
+                            ifelse(text_fits, mid_time, min_time - 0.5)),
             text_hjust = ifelse(should_place_left & text_left_align, 1,
-                               ifelse(text_fits, 0.5, 1))  # right-align if left, center if inside, right if outside
+                                ifelse(text_fits, 0.5, 1))  # right-align if left, center if inside, right if outside
           ),
         ggplot2::aes(x = text_x, y = y_pos, label = label_text, hjust = text_hjust),
         size = text_size * 0.3,
         fontface = "bold",
         color = "black",
         parse = FALSE  # No parsing needed
-        )
+      )
   }
 
   # Add dimension labels to the left for index point measurements (only if they exist)
@@ -290,7 +296,7 @@ design_diagram <- function(data,
           dplyr::summarize(
             n_vars = dplyr::n(),
             .groups = "drop"
-            ) |>
+          ) |>
           dplyr::mutate(
             # Use Unicode superscript characters
             superscript_letter = dplyr::case_when(
@@ -311,63 +317,84 @@ design_diagram <- function(data,
         fontface = "bold",
         hjust = 1,  # Right align text to position it to the left of the rectangle
         parse = FALSE
-        )
+      )
   }
 
   # Continue with the rest of the plot
   p <- p +
-    # Add vertical line for index date
-    ggplot2::geom_vline(
-      xintercept = 0,
+    # Add vertical line for index date (only through the main plot area, not extending to labels)
+    ggplot2::annotate(
+      "segment",
+      x = 0, xend = 0,
+      y = min_y_pos - box_height/2 - 0.5, yend = max_y_pos + box_height/2 + 0.5,
       linetype = "solid",
       color = "black",
       linewidth = 1.2
-      ) +
+    ) +
+    # Add index date label above the vertical line
+    ggplot2::annotate(
+      "text",
+      x = 0,
+      y = index_label_y,
+      label = index_date_label,
+      hjust = 0.5,
+      vjust = 0.5,
+      size = text_size * 0.35,
+      fontface = "bold",
+      color = "black"
+    ) +
+    # Add x-axis label centered below the vertical line
+    ggplot2::annotate(
+      "text",
+      x = 0,
+      y = x_axis_label_y,
+      label = paste("Time from Index Date (", time_unit, ")", sep = ""),
+      hjust = 0.5,
+      vjust = 0.5,
+      size = text_size * 0.32,
+      fontface = "bold",
+      color = "black"
+    ) +
     # Add horizontal timeline
     ggplot2::geom_hline(
-      yintercept = 0.3,
+      yintercept = min_y_pos - box_height/2 - 0.3,  # Position timeline below the lowest box
       color = "black",
       linewidth = 0.8
-      ) +
+    ) +
     # Add timeline arrows
     ggplot2::annotate(
       "segment",
       x = x_limits[1], xend = x_limits[2],
-      y = 0.3, yend = 0.3,
+      y = min_y_pos - box_height/2 - 0.3, yend = min_y_pos - box_height/2 - 0.3,
       arrow = ggplot2::arrow(length = ggplot2::unit(0.3, "cm"), ends = "both"),
       color = "black",
       linewidth = 0.8
-      ) +
+    ) +
     # Customize scales
     ggplot2::scale_fill_manual(values = color_mapping, guide = "none") +
     ggplot2::scale_color_manual(values = color_mapping, guide = "none") +
     ggplot2::scale_x_continuous(
-      name = paste("Time relative to Index Date", paste0("(", time_unit, ")")),
       breaks = scales::breaks_pretty(n = 8),
       expand = c(0.02, 0)
-      ) +
+    ) +
     ggplot2::scale_y_continuous(
-      limits = c(0, max(unique_windows$y_pos) + 1.5),
+      limits = c(x_axis_label_y - 0.2, index_label_y + 0.2),
       expand = c(0, 0)
-      ) +
+    ) +
     # Apply theme
     ggplot2::theme_minimal(base_size = text_size) +
     ggplot2::theme(
       axis.title.y = ggplot2::element_blank(),
       axis.text.y = ggplot2::element_blank(),
       axis.ticks.y = ggplot2::element_blank(),
+      axis.title.x = ggplot2::element_blank(),  # Remove default x-axis title
       panel.grid.major.y = ggplot2::element_blank(),
       panel.grid.minor.y = ggplot2::element_blank(),
       panel.grid.minor.x = ggplot2::element_blank(),
-      plot.title = ggplot2::element_text(hjust = 0.5, face = "bold", size = text_size * 1.2),
-      axis.title.x = ggplot2::element_text(face = "bold"),
+      plot.title = ggplot2::element_blank(),  # Remove plot title
       panel.border = ggplot2::element_blank(),
       plot.margin = ggplot2::margin(20, 20, 20, 20)
-      ) +
-    ggplot2::labs(
-      title = index_date_label,
-      x = paste("Time from Index Date (", time_unit, ")", sep = "")
-      )
+    )
 
   # Add variables legend if requested
   if (show_variables_legend) {
@@ -378,7 +405,7 @@ design_diagram <- function(data,
       dplyr::summarize(
         variables = paste(label, collapse = ", "),
         .groups = "drop"
-        ) |>
+      ) |>
       dplyr::arrange(dimension_letter) |>  # Sort by alphabetical order
       dplyr::mutate(
         time_window = ifelse(
@@ -387,7 +414,7 @@ design_diagram <- function(data,
           paste0("[", min_time_adj, " to ", max_time_adj, "]")
         ),
         legend_text = paste0(dimension_letter, ") ", dimension, " ", time_window, ": ", variables)
-        )
+      )
 
     legend_text <- paste(legend_data$legend_text, collapse = "\n")
 
@@ -399,8 +426,8 @@ design_diagram <- function(data,
           hjust = 0,
           size = text_size * 0.8,
           margin = ggplot2::margin(t = 15)
-          )
         )
+      )
   }
 
   return(p)
