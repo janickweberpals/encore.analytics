@@ -42,7 +42,7 @@ the square root of the sum of their variances. Variances are derived from the
 confidence intervals assuming normal distribution (using 1.96 for 95% CI).
 
 The formula used is:
-SMD = (θ_RCT - θ_RWE) / sqrt(Var(θ_RCT) + Var(θ_RWE))
+SMD = (\theta_RCT - \theta_RWE) / sqrt(Var(\theta_RCT) + Var(\theta_RWE))
 }
 \examples{
 # Example with hazard ratios (log scale)
