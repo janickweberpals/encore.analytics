@@ -28,7 +28,7 @@
 #' @param analysis_col Character. Name of column identifying different analyses
 #' @param group_col Character. Optional. Name of column for grouping results (e.g., database)
 #' @param estimate_label Character. Label for estimates in table header. Default: "HR (95% CI)"
-#' @param smd_threshold Numeric. Threshold for SMD agreement. Default: 1.96 (α=0.05)
+#' @param smd_threshold Numeric. Threshold for SMD agreement. Default: 1.96 (alpha=0.05)
 #'
 #' @return A gt table object with formatted agreement metrics
 #'

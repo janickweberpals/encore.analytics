@@ -30,7 +30,7 @@ Must contain these columns:
 
 \item{estimate_label}{Character. Label for estimates in table header. Default: "HR (95\% CI)"}
 
-\item{smd_threshold}{Numeric. Threshold for SMD agreement. Default: 1.96 (α=0.05)}
+\item{smd_threshold}{Numeric. Threshold for SMD agreement. Default: 1.96 (alpha=0.05)}
 }
 \value{
 A gt table object with formatted agreement metrics

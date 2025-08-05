@@ -12,7 +12,7 @@
 #' confidence intervals assuming normal distribution (using 1.96 for 95% CI).
 #'
 #' The formula used is:
-#' SMD = (θ_RCT - θ_RWE) / sqrt(Var(θ_RCT) + Var(θ_RWE))
+#' SMD = (theta_RCT - theta_RWE) / sqrt(Var(theta_RCT) + Var(theta_RWE))
 #'
 #' @param rct_estimate Numeric. Point estimate from the RCT (typically log hazard ratio or log odds ratio)
 #' @param rct_lower Numeric. Lower bound of the confidence interval from RCT
