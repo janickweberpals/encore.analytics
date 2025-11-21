@@ -22,8 +22,6 @@ Imports:
     MatchThem,
     stringr,
     mice,
-    RColorBrewer,
-    scales,
     simsurv,
     smd,
     survival,
