@@ -1,7 +1,7 @@
-# encore.analytics 0.3.0
+# encore.analytics 0.2.1
 
 * `simulate_data()` does not distribute missingness uniformly across all variables anymore, but rather introduces a different (random) missingness on different columns which average to the specified proportion missingness
-* Added `design_diagram()` function to generate longitudinal study design diagrams
+* Modified `km_pooling()` to handle special situations with time = 0 and survival probability = 1 and survival probability = 0, respectively.
 
 # encore.analytics 0.2.0
 

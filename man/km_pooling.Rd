@@ -73,6 +73,14 @@ error is computed as the square root of the total variance. The vertically stack
 with transformed and backtransformed estimates is returned with the
 \code{km_survival_table} table.
 
+Special scenarios during the transformation, pooling and backtransformation are
+considered. By convention, Kaplan-Meier survival curves start at time = 0 with survival probability = 1
+unless a delayed entry survival model is fitted (not supported yet). In the case that there is no
+observation in the data at at time = 0 with survival probability = 1, the \code{\link[ggsurvfit]{tidy_survfit}}
+extrapolates this across strata. For the complimentary log-log transformation this means, that survival probabilities = 1
+at time = 0 and corresponding confidence intervals are extrapolated to 1. If the survival proability reaches exactly 0,
+the survival probability and corresponding confidence intervals are set to 0 as well.
+
 Finally, the median survival time is extracted from the \code{km_survival_table} table
 by determining the time the survival probability drops below .5 for the first time.
 For this a sub-function of Terry M. Therneau's \code{\link[survival]{print.survfit}} function
@@ -146,5 +154,5 @@ More references:
 
 }
 \seealso{
-\code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}}
+\code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}
 }
