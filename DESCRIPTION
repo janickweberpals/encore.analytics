@@ -15,6 +15,7 @@ Imports:
     dplyr (>= 1.0.0),
     forcats,
     ggplot2,
+    ggsurvfit,
     glue,
     gt,
     gtsummary (>= 2.0.0),
