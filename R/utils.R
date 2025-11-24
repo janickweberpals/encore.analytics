@@ -14,7 +14,7 @@ globalVariables(c(
 
   # km_pooling variables
   "strata", "time", "u", "qbar", "se", "desc", "surv",
-  "lower", "upper", "std.err",
+  "lower", "upper", "std.err", "estimate", "std.error",
 
   # raking_weights variables
   "caseid",

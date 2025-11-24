@@ -34,6 +34,14 @@
 #' with transformed and backtransformed estimates is returned with the
 #' \code{km_survival_table} table.
 #'
+#' Special scenarios during the transformation, pooling and backtransformation are
+#' considered. By convention, Kaplan-Meier survival curves start at time = 0 with survival probability = 1
+#' unless a delayed entry survival model is fitted (not supported yet). In the case that there is no
+#' observation in the data at at time = 0 with survival probability = 1, the \code{\link[ggsurvfit]{tidy_survfit}}
+#' extrapolates this across strata. For the complimentary log-log transformation this means, that survival probabilities = 1
+#' at time = 0 and corresponding confidence intervals are extrapolated to 1. If the survival proability reaches exactly 0,
+#' the survival probability and corresponding confidence intervals are set to 0 as well.
+#'
 #' Finally, the median survival time is extracted from the \code{km_survival_table} table
 #' by determining the time the survival probability drops below .5 for the first time.
 #' For this a sub-function of Terry M. Therneau's \code{\link[survival]{print.survfit}} function
@@ -57,7 +65,7 @@
 #' -  https://bmcmedresmethodol.biomedcentral.com/articles/10.1186/s12874-015-0048-4
 #'
 #' @seealso
-#' \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}}
+#' \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}
 #'
 #' @param x imputed and matched (mimids) or weighted (wimids) object
 #' @param surv_formula specification of survival model formula to be fitted
@@ -155,7 +163,7 @@ km_pooling <- function(x = NULL,
     ## for weighting
     if(inherits(x, "wimids")){
 
-      survfit_fit <- survival::survfit(
+      survfit_fit <- ggsurvfit::survfit2(
         formula = surv_formula,
         weights = weights,
         robust = T,
@@ -167,7 +175,7 @@ km_pooling <- function(x = NULL,
     ## for matching
     if(inherits(x, "mimids")){
 
-      survfit_fit <- survival::survfit(
+      survfit_fit <- ggsurvfit::survfit2(
         formula = surv_formula,
         weights = weights,
         cluster = subclass,
@@ -203,7 +211,7 @@ km_pooling <- function(x = NULL,
 
   # now to combine/pool quantities with non-normal distributions
   # such as survival probabilities, Stef van Buuren
-  # recommends to tansform survival probabilities
+  # recommends to transform survival probabilities
   # using a complementary log-log transformation
   # https://stefvanbuuren.name/fimd/sec-pooling.html
   # reference: Marshall, Billingham, and Bryan (2009) https://link.springer.com/article/10.1007/s10198-008-0129-y
@@ -214,16 +222,17 @@ km_pooling <- function(x = NULL,
   # stored in survival_fit_list
   cloglog <- function(i){
 
-    # convert to data.frame
-    survival_times_df <- with(
-      summary(i),
-      data.frame(strata, time, surv, std.err, lower, upper)
+    # tidy up
+    survival_times_df <- ggsurvfit::tidy_survfit(
+      x = i,
+      times = NULL,
+      type = "survival"
       ) |>
       dplyr::mutate(
         # compute transformed qbar
-        q = log(-log(1-surv)),
+        q = log(-log(1-estimate)), # will be Inf for estimate = 1
         # compute transformed U
-        u = std.err^2 / ((1-surv) * log(1-surv))^2
+        u = std.error^2 / ((1-estimate) * log(1-estimate))^2
         )
 
     }
@@ -254,9 +263,19 @@ km_pooling <- function(x = NULL,
       upper = 1-exp(-exp(qbar + 1.96*se))
       ) |>
 
-    # arrange by strata and descending (!) survival probability
-    dplyr::arrange(strata, desc(surv))
+    # confidence intervals are both 1 for time = 0 and surv = 1
+    dplyr::mutate(
+      lower = dplyr::if_else(time == 0 & surv == 1, 1.0, lower),
+      upper = dplyr::if_else(time == 0 & surv == 1, 1.0, upper)
+      ) |>
+    # confidence intervals are both 0 for surv = 0
+    dplyr::mutate(
+      lower = dplyr::if_else(surv == 0, 0, lower),
+      upper = dplyr::if_else(surv == 0, 0, upper)
+      ) |>
 
+    # arrange by strata, time and descending survival probability
+    dplyr::arrange(strata, time, dplyr::desc(surv))
 
   # Plot a pooled Kaplan-Meier curve ----------------------------------------
 
@@ -264,7 +283,7 @@ km_pooling <- function(x = NULL,
 
   km_plot <- km_survival |>
     ggplot2::ggplot(ggplot2::aes(x = time, y = surv, color = strata, fill = strata)) +
-    ggplot2::geom_line(linewidth = 1.25) +
+    ggplot2::geom_step(linewidth = 1.25) +
     ggplot2::geom_ribbon(ggplot2::aes(ymin = lower, ymax = upper), linetype = 0, alpha = 0.2) +
     ggplot2::theme_minimal(base_size = 14) +
     ggplot2::labs(
