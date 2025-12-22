@@ -6,13 +6,17 @@
 \usage{
 km_pooling(
   x = NULL,
-  surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
+  surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat),
+  times = NULL
 )
 }
 \arguments{
 \item{x}{imputed and matched (mimids) or weighted (wimids) object}
 
 \item{surv_formula}{specification of survival model formula to be fitted}
+
+\item{times}{numeric vector of follow-up time points at which survival probabilities are to be estimated (propagated to \code{\link[ggsurvfit]{tidy_survfit}}).
+If NULL (default), survival probabilities are estimated and pooled across all observed event times.}
 }
 \value{
 list with pooled median survival estimate and pooled Kaplan-Meier curve
@@ -52,6 +56,8 @@ and matching or weighting each imputed dataset via the MatchThem package
 
 The function fits the pre-specified survfit model (\code{surv_formula}, \code{\link[survival]{survfit}} package)
 to compute survival probabilities at each individual time point according to the Kaplan-Meier method.
+Survival probabilities can be estimated at all observed event times (default) or at user-specified time points
+using the \code{times} argument, which is passed directly to \code{\link[ggsurvfit]{tidy_survfit}}.
 For matched and weighted datasets, weights, cluster membership (matching only) and robust
 variance estimates are considered in the \code{\link[survival]{survfit}} call by default.
 
@@ -61,10 +67,13 @@ across imputed datasets and time points. To that end, survival probabilities are
 transformed using a complementary log-log transformation (\code{log(-log(1-pr(surv)))})
 as recommended by multiple sources (Marshall, Billingham, and Bryan (2009)).
 
-To pool the transformed estimates across imputed datasets and time points, the pool.scalar
+To pool the transformed estimates across imputed datasets and time points, the \code{\link[mice]{pool.scalar}}
 function is used to apply Rubin's rule to combine pooled estimates (qbar) according to
 formula (3.1.2) Rubin (1987) and to compute the corresponding total variance (t) of the pooled
-estimate according to formula (3.1.5) Rubin (1987).
+estimate according to formula (3.1.5) Rubin (1987). When \code{times = NULL}, the pooling is performed
+at each unique combination of event times across all imputed datasets. When specific time points are provided
+via the \code{times} argument, pooling occurs only at those pre-specified time points, ensuring consistency
+across datasets and facilitating comparison at clinically relevant follow-up intervals.
 
 The pooled survival probabilities are then back-transformed via \code{1-exp(-exp(qbar))}
 for pooled survival probability estimates and \code{1-exp(-exp(qbar +/- 1.96*sqrt(t)))}
@@ -72,6 +81,14 @@ for lower and upper 95\% confidence intervals. As the formula indicates, the poo
 error is computed as the square root of the total variance. The vertically stacked table
 with transformed and backtransformed estimates is returned with the
 \code{km_survival_table} table.
+
+Special scenarios during the transformation, pooling and backtransformation are
+considered. By convention, Kaplan-Meier survival curves start at time = 0 with survival probability = 1
+unless a delayed entry survival model is fitted (not supported yet). In the case that there is no
+observation in the data at at time = 0 with survival probability = 1, the \code{\link[ggsurvfit]{tidy_survfit}}
+extrapolates this across strata. For the complimentary log-log transformation this means, that survival probabilities = 1
+at time = 0 and corresponding confidence intervals are extrapolated to 1. If the survival proability reaches exactly 0,
+the survival probability and corresponding confidence intervals are set to 0 as well.
 
 Finally, the median survival time is extracted from the \code{km_survival_table} table
 by determining the time the survival probability drops below .5 for the first time.
@@ -83,6 +100,15 @@ is used. Therneau also considers some edge cases/nuisances (x = time, y = surv):
 \item Nuisance 3: if no y's are <=.5, then we should return NA
 \item Nuisance 4: the obs (or many) after the .5 may be censored, giving a stretch of values = .5 +- epsilon
 }
+
+\strong{Important Gotcha}: When using the \code{times} argument to specify custom time points, ensure that
+sufficient time points are requested to capture the range of interest. If too few time points are specified,
+the \code{km_median_survival} estimates and \code{km_plot} may not represent the true survival trajectory.
+Specifically, if the median survival time lies between two requested time points or if requested time points
+do not adequately cover the follow-up period, the median survival estimates will be inaccurate or return \code{NA}.
+Similarly, the Kaplan-Meier curve will appear sparse or disconnected. For most applications, using the default
+\code{times = NULL} is recommended to automatically use all observed event times. If using custom time points,
+ensure they are sufficiently granular to capture the survival dynamics of interest.
 
 The function follows the following logic:
 \enumerate{
@@ -146,5 +172,5 @@ More references:
 
 }
 \seealso{
-\code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}}
+\code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}
 }

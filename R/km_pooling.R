@@ -13,6 +13,8 @@
 #'
 #' The function fits the pre-specified survfit model (\code{surv_formula}, \code{\link[survival]{survfit}} package)
 #' to compute survival probabilities at each individual time point according to the Kaplan-Meier method.
+#' Survival probabilities can be estimated at all observed event times (default) or at user-specified time points
+#' using the \code{times} argument, which is passed directly to \code{\link[ggsurvfit]{tidy_survfit}}.
 #' For matched and weighted datasets, weights, cluster membership (matching only) and robust
 #' variance estimates are considered in the \code{\link[survival]{survfit}} call by default.
 #'
@@ -22,10 +24,13 @@
 #' transformed using a complementary log-log transformation (\code{log(-log(1-pr(surv)))})
 #' as recommended by multiple sources (Marshall, Billingham, and Bryan (2009)).
 #'
-#' To pool the transformed estimates across imputed datasets and time points, the pool.scalar
+#' To pool the transformed estimates across imputed datasets and time points, the \code{\link[mice]{pool.scalar}}
 #' function is used to apply Rubin's rule to combine pooled estimates (qbar) according to
 #' formula (3.1.2) Rubin (1987) and to compute the corresponding total variance (t) of the pooled
-#' estimate according to formula (3.1.5) Rubin (1987).
+#' estimate according to formula (3.1.5) Rubin (1987). When \code{times = NULL}, the pooling is performed
+#' at each unique combination of event times across all imputed datasets. When specific time points are provided
+#' via the \code{times} argument, pooling occurs only at those pre-specified time points, ensuring consistency
+#' across datasets and facilitating comparison at clinically relevant follow-up intervals.
 #'
 #' The pooled survival probabilities are then back-transformed via \code{1-exp(-exp(qbar))}
 #' for pooled survival probability estimates and \code{1-exp(-exp(qbar +/- 1.96*sqrt(t)))}
@@ -33,6 +38,14 @@
 #' error is computed as the square root of the total variance. The vertically stacked table
 #' with transformed and backtransformed estimates is returned with the
 #' \code{km_survival_table} table.
+#'
+#' Special scenarios during the transformation, pooling and backtransformation are
+#' considered. By convention, Kaplan-Meier survival curves start at time = 0 with survival probability = 1
+#' unless a delayed entry survival model is fitted (not supported yet). In the case that there is no
+#' observation in the data at at time = 0 with survival probability = 1, the \code{\link[ggsurvfit]{tidy_survfit}}
+#' extrapolates this across strata. For the complimentary log-log transformation this means, that survival probabilities = 1
+#' at time = 0 and corresponding confidence intervals are extrapolated to 1. If the survival proability reaches exactly 0,
+#' the survival probability and corresponding confidence intervals are set to 0 as well.
 #'
 #' Finally, the median survival time is extracted from the \code{km_survival_table} table
 #' by determining the time the survival probability drops below .5 for the first time.
@@ -42,6 +55,15 @@
 #' - Nuisance 2: there may by an NA in the y's
 #' - Nuisance 3: if no y's are <=.5, then we should return NA
 #' - Nuisance 4: the obs (or many) after the .5 may be censored, giving a stretch of values = .5 +- epsilon
+#'
+#' \strong{Important Gotcha}: When using the \code{times} argument to specify custom time points, ensure that
+#' sufficient time points are requested to capture the range of interest. If too few time points are specified,
+#' the \code{km_median_survival} estimates and \code{km_plot} may not represent the true survival trajectory.
+#' Specifically, if the median survival time lies between two requested time points or if requested time points
+#' do not adequately cover the follow-up period, the median survival estimates will be inaccurate or return \code{NA}.
+#' Similarly, the Kaplan-Meier curve will appear sparse or disconnected. For most applications, using the default
+#' \code{times = NULL} is recommended to automatically use all observed event times. If using custom time points,
+#' ensure they are sufficiently granular to capture the survival dynamics of interest.
 #'
 #' The function follows the following logic:
 #' 1. Fit Kaplan-Meier survival function to each imputed and matched/weighted dataset
@@ -57,10 +79,12 @@
 #' -  https://bmcmedresmethodol.biomedcentral.com/articles/10.1186/s12874-015-0048-4
 #'
 #' @seealso
-#' \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}}
+#' \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}
 #'
 #' @param x imputed and matched (mimids) or weighted (wimids) object
 #' @param surv_formula specification of survival model formula to be fitted
+#' @param times numeric vector of follow-up time points at which survival probabilities are to be estimated (propagated to \code{\link[ggsurvfit]{tidy_survfit}}). 
+#' If NULL (default), survival probabilities are estimated and pooled across all observed event times.
 #'
 #' @return list with pooled median survival estimate and pooled Kaplan-Meier curve
 #' \code{km_median_survival}:
@@ -130,10 +154,13 @@
 #'  km_out$km_plot
 #'
 km_pooling <- function(x = NULL,
-                       surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
+                       surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat),
+                       times = NULL
                        ){
 
-  # input checks
+
+  # input checks ------------------------------------------------------------
+
   # check if x is a mimids or wimids object
   assertthat::assert_that(inherits(x, c("mimids", "wimids")), msg = "<x> needs to be a mimids or wimids object")
   # check if surv_formula is a formula
@@ -144,6 +171,7 @@ km_pooling <- function(x = NULL,
   if(inherits(x, "mimids")){
     assertthat::assert_that("subclass" %in% names(MatchThem::complete(x)), msg = "<x> needs to contain a weights column")
   }
+  if(!is.null(times)) assertthat::assert_that(is.numeric(times), msg = "<times> needs to be a numeric vector")
 
   # Fit Kaplan Meier --------------------------------------------------------
 
@@ -155,7 +183,7 @@ km_pooling <- function(x = NULL,
     ## for weighting
     if(inherits(x, "wimids")){
 
-      survfit_fit <- survival::survfit(
+      survfit_fit <- ggsurvfit::survfit2(
         formula = surv_formula,
         weights = weights,
         robust = T,
@@ -167,7 +195,7 @@ km_pooling <- function(x = NULL,
     ## for matching
     if(inherits(x, "mimids")){
 
-      survfit_fit <- survival::survfit(
+      survfit_fit <- ggsurvfit::survfit2(
         formula = surv_formula,
         weights = weights,
         cluster = subclass,
@@ -190,7 +218,7 @@ km_pooling <- function(x = NULL,
   # include = FALSE : do NOT include original data with the missing values
 
   # Important: the all = parameter needs to be set to FALSE
-  # since otherwise unmatched patients or those zero weight
+  # since otherwise unmatched patients or those with zero weight
   # will be included, too!
   object_list <- MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)
 
@@ -203,7 +231,7 @@ km_pooling <- function(x = NULL,
 
   # now to combine/pool quantities with non-normal distributions
   # such as survival probabilities, Stef van Buuren
-  # recommends to tansform survival probabilities
+  # recommends to transform survival probabilities
   # using a complementary log-log transformation
   # https://stefvanbuuren.name/fimd/sec-pooling.html
   # reference: Marshall, Billingham, and Bryan (2009) https://link.springer.com/article/10.1007/s10198-008-0129-y
@@ -214,17 +242,20 @@ km_pooling <- function(x = NULL,
   # stored in survival_fit_list
   cloglog <- function(i){
 
-    # convert to data.frame
-    survival_times_df <- with(
-      summary(i),
-      data.frame(strata, time, surv, std.err, lower, upper)
+    # tidy up
+    survival_times_df <- ggsurvfit::tidy_survfit(
+      x = i,
+      times = times,
+      type = "survival"
       ) |>
       dplyr::mutate(
         # compute transformed qbar
-        q = log(-log(1-surv)),
+        q = log(-log(1-estimate)), # will be Inf for estimate = 1
         # compute transformed U
-        u = std.err^2 / ((1-surv) * log(1-surv))^2
+        u = std.error^2 / ((1-estimate) * log(1-estimate))^2
         )
+
+    return(survival_times_df)
 
     }
 
@@ -254,9 +285,19 @@ km_pooling <- function(x = NULL,
       upper = 1-exp(-exp(qbar + 1.96*se))
       ) |>
 
-    # arrange by strata and descending (!) survival probability
-    dplyr::arrange(strata, desc(surv))
+    # confidence intervals are both 1 for time = 0 and surv = 1
+    dplyr::mutate(
+      lower = dplyr::if_else(time == 0 & surv == 1, 1.0, lower),
+      upper = dplyr::if_else(time == 0 & surv == 1, 1.0, upper)
+      ) |>
+    # confidence intervals are both 0 for surv = 0
+    dplyr::mutate(
+      lower = dplyr::if_else(surv == 0, 0, lower),
+      upper = dplyr::if_else(surv == 0, 0, upper)
+      ) |>
 
+    # arrange by strata, time and descending survival probability
+    dplyr::arrange(strata, time, dplyr::desc(surv))
 
   # Plot a pooled Kaplan-Meier curve ----------------------------------------
 
@@ -264,7 +305,7 @@ km_pooling <- function(x = NULL,
 
   km_plot <- km_survival |>
     ggplot2::ggplot(ggplot2::aes(x = time, y = surv, color = strata, fill = strata)) +
-    ggplot2::geom_line(linewidth = 1.25) +
+    ggplot2::geom_step(linewidth = 1.25) +
     ggplot2::geom_ribbon(ggplot2::aes(ymin = lower, ymax = upper), linetype = 0, alpha = 0.2) +
     ggplot2::theme_minimal(base_size = 14) +
     ggplot2::labs(
@@ -331,7 +372,7 @@ km_pooling <- function(x = NULL,
 
     }else{
 
-      # Therneau assigns a 0 of no confidence intervals are available
+      # Therneau assigns a 0 if no confidence intervals are available
       upper <- 0
       lower <- 0
 
@@ -344,6 +385,8 @@ km_pooling <- function(x = NULL,
       t_lower = lower, # lower 95% CI of median survival time
       t_upper = upper # upper 95% CI of median survival time
       )
+
+    return(minmin_strata_return_tibble)
 
   }
 
