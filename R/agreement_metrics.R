@@ -5,7 +5,9 @@
 #'
 #' @details
 #' Calculates three types of agreement metrics:
-#' - Statistical significance agreement: Same direction and statistical significance
+#' - Statistical significance agreement: RCT and RWE confidence intervals fall on the
+#'   same side of the null value of 1 (both entirely above, both entirely below, or
+#'   both include the null, i.e. both non-significant)
 #' - Estimate agreement: RWE estimate within RCT confidence interval
 #' - SMD agreement: Standardized mean difference below threshold (default 1.96)
 #'
@@ -27,7 +29,10 @@
 #'
 #' @param analysis_col Character. Name of column identifying different analyses
 #' @param group_col Character. Optional. Name of column for grouping results (e.g., database)
-#' @param estimate_label Character. Label for estimates in table header. Default: "HR (95% CI)"
+#' @param estimate_label Character. Label for estimates in table header. Default: "HR (95% CI)".
+#' If the value is one of "HR (95% CI)", "OR (95% CI)", or "RR (95% CI)", the table footnote
+#' includes a matching abbreviation definition (e.g. "HR = Hazard ratio"); any other value is
+#' used as-is for the header without adding an abbreviation definition to the footnote.
 #' @param smd_threshold Numeric. Threshold for SMD agreement. Default: 1.96 (alpha=0.05)
 #'
 #' @return A gt table object with formatted agreement metrics
@@ -74,42 +79,78 @@
 #' agreement_metrics(x, analysis_col = "Analysis", group_col = "Database")
 #'
 #' @export
-agreement_metrics <- function(x,
-                              analysis_col,
-                              group_col = NULL, # subgroup, e.g, database
-                              estimate_label = "HR (95% CI)",
-                              smd_threshold = 1.96 # customizable threshold for SMD agreement
-                              ){
-
+agreement_metrics <- function(
+  x,
+  analysis_col,
+  group_col = NULL, # subgroup, e.g, database
+  estimate_label = "HR (95% CI)",
+  smd_threshold = 1.96 # customizable threshold for SMD agreement
+) {
   # input checks
-  assertthat::assert_that(any(class(x) %in% c("data.frame", "tibble")), msg = "<x> is not a data.frame or tibble")
-  assertthat::assert_that(all(c("rct_estimate", "rct_lower", "rct_upper", "rwe_estimate", "rwe_lower", "rwe_upper") %in% colnames(x)), msg = "<x> does not contain all required columns")
-  assertthat::assert_that(!is.null(analysis_col), msg = "<analysis_col> cannot be NULL")
-  assertthat::assert_that(analysis_col %in% colnames(x), msg = sprintf("<analysis_col> '%s' not found in <x>", analysis_col))
-  if(!is.null(group_col)) assertthat::assert_that(group_col %in% colnames(x), msg = "<group_col> not in <x>")
+  assertthat::assert_that(
+    any(class(x) %in% c("data.frame", "tibble")),
+    msg = "<x> is not a data.frame or tibble"
+  )
+  assertthat::assert_that(
+    all(
+      c(
+        "rct_estimate",
+        "rct_lower",
+        "rct_upper",
+        "rwe_estimate",
+        "rwe_lower",
+        "rwe_upper"
+      ) %in%
+        colnames(x)
+    ),
+    msg = "<x> does not contain all required columns"
+  )
+  assertthat::assert_that(
+    !is.null(analysis_col),
+    msg = "<analysis_col> cannot be NULL"
+  )
+  assertthat::assert_that(
+    analysis_col %in% colnames(x),
+    msg = sprintf("<analysis_col> '%s' not found in <x>", analysis_col)
+  )
+  if (!is.null(group_col)) {
+    assertthat::assert_that(
+      group_col %in% colnames(x),
+      msg = "<group_col> not in <x>"
+    )
+  }
 
   # check for non-positive values
-  assertthat::assert_that(all(x$rct_estimate > 0), msg = "RCT estimates must be positive for hazard ratios")
-  assertthat::assert_that(all(x$rwe_estimate > 0), msg = "RWE estimates must be positive for hazard ratios")
+  assertthat::assert_that(
+    all(x$rct_estimate > 0),
+    msg = "RCT estimates must be positive for hazard ratios"
+  )
+  assertthat::assert_that(
+    all(x$rwe_estimate > 0),
+    msg = "RWE estimates must be positive for hazard ratios"
+  )
 
   # if no smd_value present in the results table, calculate it
-  if(!"smd_value" %in% colnames(x)){
+  if (!"smd_value" %in% colnames(x)) {
     x <- x |>
       dplyr::rowwise() |>
       dplyr::mutate(
-        smd_value = tryCatch({
-          smd_agreement(
-            rct_estimate = log(rct_estimate),
-            rct_lower = log(rct_lower),
-            rct_upper = log(rct_upper),
-            rwe_estimate = log(rwe_estimate),
-            rwe_lower = log(rwe_lower),
-            rwe_upper = log(rwe_upper)
-          )
-        }, error = function(e) {
-          warning(sprintf("SMD calculation failed: %s", e$message))
-          NA_real_
-        })
+        smd_value = tryCatch(
+          {
+            smd_agreement(
+              rct_estimate = log(rct_estimate),
+              rct_lower = log(rct_lower),
+              rct_upper = log(rct_upper),
+              rwe_estimate = log(rwe_estimate),
+              rwe_lower = log(rwe_lower),
+              rwe_upper = log(rwe_upper)
+            )
+          },
+          error = function(e) {
+            warning(sprintf("SMD calculation failed: %s", e$message))
+            NA_real_
+          }
+        )
       ) |>
       dplyr::ungroup()
   }
@@ -117,40 +158,55 @@ agreement_metrics <- function(x,
   # calculate agreement metrics
   x <- x |>
     dplyr::mutate(
-      # significance agreement with additional categories
+      # significance agreement: RCT and RWE agree if their CIs fall in the
+      # same position relative to the null (both entirely above, both
+      # entirely below, or both straddling/touching it)
       significance_agreement = dplyr::case_when(
-        # superiority
-        rct_estimate < 1 & rct_upper < 1 & rwe_estimate < 1 & rwe_upper < 1 ~ "Yes",
-        # non-inferiority
-        rct_estimate < 1 & rct_upper >= 1 & rwe_estimate < 1 & rwe_upper >= 1 ~ "Yes",
-        # inferiority
-        rct_estimate >= 1 & rct_lower >= 1 & rwe_estimate >= 1 & rwe_upper >= 1 ~ "Yes",
+        # both significantly above the null
+        rct_lower > 1 & rwe_lower > 1 ~ "Yes",
+        # both significantly below the null
+        rct_upper < 1 & rwe_upper < 1 ~ "Yes",
+        # both null (CI includes 1)
+        (rct_lower <= 1 & rct_upper >= 1) &
+          (rwe_lower <= 1 & rwe_upper >= 1) ~ "Yes",
         # all other cases
         TRUE ~ "No"
-        ),
+      ),
 
       # estimate agreement
       estimate_agreement = dplyr::if_else(
-        rwe_estimate >= rct_lower & rwe_estimate <= rct_upper, "Yes", "No"
-        ),
+        rwe_estimate >= rct_lower & rwe_estimate <= rct_upper,
+        "Yes",
+        "No"
+      ),
 
       # smd agreement using parameter
       smd_agreement = dplyr::case_when(
         is.na(smd_value) ~ "NA",
         abs(smd_value) < smd_threshold ~ "Yes",
         TRUE ~ "No"
-        )
       )
+    )
 
   # format table for display
   x_format <- x |>
-    dplyr::mutate(dplyr::across(where(is.numeric), ~ format(.x, digits = 2, nsmall = 2))) |>
+    dplyr::mutate(dplyr::across(
+      where(is.numeric),
+      ~ format(.x, digits = 2, nsmall = 2)
+    )) |>
     dplyr::mutate(
       RCT = glue::glue("{rct_estimate} ({rct_lower} - {rct_upper})"),
       RWE = glue::glue("{rwe_estimate} ({rwe_lower} - {rwe_upper})"),
       smd_agreement = glue::glue("{smd_agreement} ({smd_value})")
-      ) |>
-    dplyr::select(dplyr::all_of(c(analysis_col, group_col)), "RCT", "RWE", "significance_agreement", "estimate_agreement", "smd_agreement")
+    ) |>
+    dplyr::select(
+      dplyr::all_of(c(analysis_col, group_col)),
+      "RCT",
+      "RWE",
+      "significance_agreement",
+      "estimate_agreement",
+      "smd_agreement"
+    )
 
   # conditional grouping
   if (!is.null(group_col)) {
@@ -164,15 +220,21 @@ agreement_metrics <- function(x,
     gt::tab_spanner(
       label = estimate_label,
       columns = c("RCT", "RWE")
-      ) |>
+    ) |>
     gt::cols_label(
-      significance_agreement = gt::md("Statistical <br> significance <br> agreement"),
+      significance_agreement = gt::md(
+        "Statistical <br> significance <br> agreement"
+      ),
       estimate_agreement = gt::md("Estimate <br> agreement"),
       smd_agreement = "SMD"
-      )
+    )
 
   # apply styles for agreement columns
-  for (col in c("significance_agreement", "estimate_agreement", "smd_agreement")) {
+  for (col in c(
+    "significance_agreement",
+    "estimate_agreement",
+    "smd_agreement"
+  )) {
     x_gt <- x_gt |>
       gt::tab_style(
         style = gt::cell_text(color = "darkgreen"),
@@ -199,25 +261,36 @@ agreement_metrics <- function(x,
   }
 
   # footnote estimate label
-  if(estimate_label == "HR (95% CI)") footnote_label <- "HR = Hazard ratio"
+  footnote_label <- switch(
+    estimate_label,
+    "HR (95% CI)" = "HR = Hazard ratio",
+    "OR (95% CI)" = "OR = Odds ratio",
+    "RR (95% CI)" = "RR = Rate ratio",
+    NULL
+  )
+
+  abbreviations <- "Abbreviations: CI = Confidence interval, RCT = Randomized controlled trial, RWE = Real-world evidence, SMD = standardized mean difference (based on log hazard ratios)"
+  if (!is.null(footnote_label)) {
+    abbreviations <- glue::glue(
+      "Abbreviations: CI = Confidence interval, {footnote_label}, RCT = Randomized controlled trial, RWE = Real-world evidence, SMD = standardized mean difference (based on log hazard ratios)"
+    )
+  }
 
   # Add bold styling for headers
   x_gt <- x_gt |>
     gt::tab_style(
       style = gt::cell_text(weight = "bold"),
       locations = gt::cells_column_labels()
-      ) |>
+    ) |>
     gt::tab_style(
       style = gt::cell_text(weight = "bold"),
       locations = gt::cells_column_spanners()
-      ) |>
+    ) |>
     gt::tab_style(
       style = gt::cell_text(weight = "bold"),
       locations = gt::cells_row_groups()
-      ) |>
-    gt::tab_footnote(
-      glue::glue("Abbreviations: CI = Confidence interval, {footnote_label}, RCT = Randomized controlled trial, RWE = Real-world evidence, SMD = standardized mean difference (based on log hazard ratios)")
-      )
+    ) |>
+    gt::tab_footnote(abbreviations)
 
   return(x_gt)
 }
