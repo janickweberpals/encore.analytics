@@ -28,7 +28,10 @@ Must contain these columns:
 
 \item{group_col}{Character. Optional. Name of column for grouping results (e.g., database)}
 
-\item{estimate_label}{Character. Label for estimates in table header. Default: "HR (95\% CI)"}
+\item{estimate_label}{Character. Label for estimates in table header. Default: "HR (95\% CI)".
+If the value is one of "HR (95\% CI)", "OR (95\% CI)", or "RR (95\% CI)", the table footnote
+includes a matching abbreviation definition (e.g. "HR = Hazard ratio"); any other value is
+used as-is for the header without adding an abbreviation definition to the footnote.}
 
 \item{smd_threshold}{Numeric. Threshold for SMD agreement. Default: 1.96 (alpha=0.05)}
 }
@@ -42,7 +45,9 @@ with real-world evidence (RWE) emulation studies by calculating agreement metric
 \details{
 Calculates three types of agreement metrics:
 \itemize{
-\item Statistical significance agreement: Same direction and statistical significance
+\item Statistical significance agreement: RCT and RWE confidence intervals fall on the
+same side of the null value of 1 (both entirely above, both entirely below, or
+both include the null, i.e. both non-significant)
 \item Estimate agreement: RWE estimate within RCT confidence interval
 \item SMD agreement: Standardized mean difference below threshold (default 1.96)
 }
