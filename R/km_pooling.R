@@ -208,8 +208,11 @@ km_pooling <- function(
   }
 
   # check that ... does not try to override arguments set internally
+  # (...names() reads argument names without forcing/evaluating them, since
+  # some, like `id`, are intended to be resolved as columns of the imputed
+  # data further down rather than as objects that exist here)
   reserved_dots <- intersect(
-    names(list(...)),
+    ...names(),
     c("formula", "data", "weights", "cluster", "robust")
   )
   assertthat::assert_that(
@@ -220,37 +223,53 @@ km_pooling <- function(
     )
   )
 
+  # capture the *unevaluated* expressions behind `...` (e.g. list(id = patientid)
+  # becomes list(id = quote(patientid))). This must not be `list(...)`: some
+  # arguments (like `id`) are column names meant to be resolved against
+  # `data = i` inside survfit(), not objects that exist in this environment,
+  # and `list(...)` would force and fail on them immediately.
+  extra_args <- as.list(substitute(list(...)))[-1]
+
   # Fit Kaplan Meier --------------------------------------------------------
 
   # first, we fit a survival function for ith dataset
-  # `...` forwards any extra arguments to survfit2() (and onwards to
-  # survival::survfit()). `weights` and `subclass` (matching only) are resolved
-  # by survfit() against `data = i` via non-standard evaluation.
-  compute_km <- function(i, ...) {
+  #
+  # The survfit2() call is built with as.call()/eval() rather than written
+  # literally with a trailing `...`. ggsurvfit::survfit2() reconstructs its
+  # call internally (match.call(expand.dots = TRUE)) to dispatch to
+  # survival::survfit(); if `...` is spliced in literally at this call site,
+  # that reconstruction degrades NSE arguments like `id` into positional
+  # `..1`-style placeholders that no longer resolve once survfit() tries to
+  # evaluate them as columns of `data = i`. Building the call explicitly with
+  # `formula`/`data`/`weights`/`cluster` kept as plain symbols (resolved by
+  # survfit() against `data = i`, exactly like a literal call would) and
+  # `extra_args` spliced in by value avoids that.
+  compute_km <- function(i) {
     # compute the survival function for dataset i
 
     ## for weighting
     if (inherits(x, "wimids")) {
-      survfit_fit <- ggsurvfit::survfit2(
-        formula = surv_formula,
-        weights = weights,
+      base_args <- list(
+        formula = quote(surv_formula),
+        weights = quote(weights),
         robust = TRUE,
-        data = i,
-        ...
+        data = quote(i)
       )
     }
 
     ## for matching
     if (inherits(x, "mimids")) {
-      survfit_fit <- ggsurvfit::survfit2(
-        formula = surv_formula,
-        weights = weights,
-        cluster = subclass,
+      base_args <- list(
+        formula = quote(surv_formula),
+        weights = quote(weights),
+        cluster = quote(subclass),
         robust = TRUE,
-        data = i,
-        ...
+        data = quote(i)
       )
     }
+
+    call_expr <- as.call(c(quote(ggsurvfit::survfit2), base_args, extra_args))
+    survfit_fit <- eval(call_expr, envir = environment())
 
     return(survfit_fit)
   }
@@ -274,7 +293,7 @@ km_pooling <- function(
 
   # now apply the compute_km function across all imputed and matched/weighted datasets
   # this creates a list with computed survival probabilities
-  survival_fit_list <- lapply(object_list, FUN = compute_km, ...)
+  survival_fit_list <- lapply(object_list, FUN = compute_km)
 
   # pool survival probabilities ---------------------------------------------
 

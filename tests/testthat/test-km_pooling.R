@@ -99,6 +99,21 @@ test_that("km_pooling forwards extra arguments to survfit2()", {
   )
 })
 
+test_that("km_pooling forwards ... arguments that must be resolved as columns of the data", {
+
+  # `id` (like `weights`/`cluster`) is not an object in this environment --
+  # it must be resolved by survfit() as a column of each imputed dataset.
+  # This is a regression test: forwarding `...` naively (either via list(...)
+  # in the reserved-argument guard, or by splicing a literal `...` into the
+  # survfit2() call) breaks this, either by forcing `patientid` too early
+  # ("object 'patientid' not found") or by corrupting it into an unresolvable
+  # `..1` placeholder inside survfit2()'s internal call reconstruction.
+  result <- km_pooling(x = wimids, surv_formula = km_fit, id = patientid)
+
+  expect_named(result, c("km_median_survival", "km_plot", "km_survival_table"))
+  expect_gt(nrow(result$km_survival_table), 0)
+})
+
 test_that("km_pooling rejects arguments it sets internally via ...", {
   for (arg in list(
     list(formula = NULL),
