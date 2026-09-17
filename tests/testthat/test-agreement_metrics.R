@@ -375,3 +375,112 @@ test_that("agreement_metrics validates show_aggregate and show_aggregate_total",
     "<show_aggregate_total> must be a single logical value"
   )
 })
+
+test_that("agreement_metrics smd_scale defaults to log and reproduces existing SMD values", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.3, 0.2, 0.4, 0.5, 0.4, 0.6
+  )
+
+  expected_smd <- {
+    num <- log(0.3) - log(0.5)
+    var_rct <- (log(0.4) - log(0.2)) / (2 * 1.96)
+    var_rwe <- (log(0.6) - log(0.4)) / (2 * 1.96)
+    num / sqrt(var_rct^2 + var_rwe^2)
+  }
+
+  result_default <- agreement_metrics(x, analysis_col = "Analysis", metrics = "smd_agreement")
+  result_explicit_log <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement",
+    smd_scale = "log"
+  )
+
+  expect_equal(result_default[["_data"]], result_explicit_log[["_data"]])
+  expect_true(stringr::str_detect(
+    result_default[["_data"]][["smd_agreement"]],
+    sprintf("\\(%s\\)", format(expected_smd, digits = 2, nsmall = 2))
+  ))
+})
+
+test_that("agreement_metrics smd_scale = 'identity' skips the log transform", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.3, 0.2, 0.4, 0.5, 0.4, 0.6
+  )
+
+  expected_smd <- {
+    num <- 0.3 - 0.5
+    var_rct <- (0.4 - 0.2) / (2 * 1.96)
+    var_rwe <- (0.6 - 0.4) / (2 * 1.96)
+    num / sqrt(var_rct^2 + var_rwe^2)
+  }
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement",
+    smd_scale = "identity"
+  )
+
+  expect_true(stringr::str_detect(
+    result[["_data"]][["smd_agreement"]],
+    sprintf("\\(%s\\)", format(expected_smd, digits = 2, nsmall = 2))
+  ))
+})
+
+test_that("agreement_metrics smd_scale = 'logit' applies the logit transform", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.3, 0.2, 0.4, 0.5, 0.4, 0.6
+  )
+
+  logit <- function(p) log(p / (1 - p))
+  expected_smd <- {
+    num <- logit(0.3) - logit(0.5)
+    var_rct <- (logit(0.4) - logit(0.2)) / (2 * 1.96)
+    var_rwe <- (logit(0.6) - logit(0.4)) / (2 * 1.96)
+    num / sqrt(var_rct^2 + var_rwe^2)
+  }
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement",
+    smd_scale = "logit"
+  )
+
+  expect_true(stringr::str_detect(
+    result[["_data"]][["smd_agreement"]],
+    sprintf("\\(%s\\)", format(expected_smd, digits = 2, nsmall = 2))
+  ))
+})
+
+test_that("agreement_metrics validates smd_scale", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", smd_scale = "bogus"),
+    "should be one of"
+  )
+})
+
+test_that("agreement_metrics footnote text reflects the selected smd_scale", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.3, 0.2, 0.4, 0.5, 0.4, 0.6
+  )
+
+  footnote_for <- function(scale) {
+    result <- agreement_metrics(x, analysis_col = "Analysis", smd_scale = scale)
+    result[["_footnotes"]][["footnotes"]][[1]]
+  }
+
+  expect_true(stringr::str_detect(footnote_for("log"), "based on log-transformed estimates"))
+  expect_true(stringr::str_detect(footnote_for("identity"), "based on estimates' original scale"))
+  expect_true(stringr::str_detect(footnote_for("logit"), "based on logit-transformed estimates"))
+})

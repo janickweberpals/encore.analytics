@@ -12,7 +12,8 @@ agreement_metrics(
   smd_threshold = 1.96,
   metrics = c("significance_agreement", "estimate_agreement", "smd_agreement"),
   show_aggregate = FALSE,
-  show_aggregate_total = TRUE
+  show_aggregate_total = TRUE,
+  smd_scale = c("log", "identity", "logit")
 )
 }
 \arguments{
@@ -52,6 +53,17 @@ Default: FALSE.}
 \item{show_aggregate_total}{Logical. If TRUE, adds a source note below the table with
 a single agreement percentage pooled across all selected metrics and all rows combined,
 using the same Yes / (Yes + No) logic as \code{show_aggregate}. Default: TRUE.}
+
+\item{smd_scale}{Character. Which transform to apply to the RCT/RWE estimates and
+confidence limits before computing the SMD. One of "log" (default), "identity", or
+"logit". "log" is appropriate for ratio-scale measures (HR, OR, RR, IRR), since their
+confidence intervals are constructed via the delta method on the log scale. "identity"
+skips the transform, for measures already on an additive/difference scale (e.g. risk
+differences). "logit" is for proportions bounded on [0, 1]. Each option expects
+inputs in a particular domain (log: > 0; logit: strictly between 0 and 1; identity:
+any real number); values outside that domain will silently produce an "NA" SMD
+agreement result for that row rather than raising an error. See Details for a
+related limitation that \code{smd_scale} does not address.}
 }
 \value{
 A gt table object with formatted agreement metrics
@@ -76,7 +88,19 @@ the output), which is relevant for the SMD calculation in particular, since it
 is the most expensive step and may not be meaningful for all effect size types.
 
 All estimates should be hazard ratios (HR) and must be positive.
-Estimates are log-transformed for SMD calculation.
+Estimates are transformed before the SMD calculation according to \code{smd_scale}
+(log-transformed by default).
+
+\strong{Known limitation for non-ratio-scale effect sizes}: \code{smd_scale} only changes
+the transform used inside the SMD calculation. It does not change the function's
+other ratio-scale assumptions: the positivity check on \code{rct_estimate}/\code{rwe_estimate}
+and \code{significance_agreement}'s comparison against a null value of 1 are applied
+regardless of \code{smd_scale}. For example, setting \code{smd_scale = "identity"} to use a
+risk difference still requires positive input values and still evaluates
+statistical significance against a null of 1 rather than 0 — both of which are
+incorrect for a difference-scale measure. This is a known, currently unaddressed
+limitation; \code{agreement_metrics()} is designed for ratio-scale effect measures
+(HR, OR, RR, IRR) beyond just the SMD calculation.
 }
 \examples{
 # Example 1: One analysis per database with grouping

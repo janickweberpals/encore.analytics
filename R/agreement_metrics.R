@@ -17,7 +17,19 @@
 #' is the most expensive step and may not be meaningful for all effect size types.
 #'
 #' All estimates should be hazard ratios (HR) and must be positive.
-#' Estimates are log-transformed for SMD calculation.
+#' Estimates are transformed before the SMD calculation according to `smd_scale`
+#' (log-transformed by default).
+#'
+#' **Known limitation for non-ratio-scale effect sizes**: `smd_scale` only changes
+#' the transform used inside the SMD calculation. It does not change the function's
+#' other ratio-scale assumptions: the positivity check on `rct_estimate`/`rwe_estimate`
+#' and `significance_agreement`'s comparison against a null value of 1 are applied
+#' regardless of `smd_scale`. For example, setting `smd_scale = "identity"` to use a
+#' risk difference still requires positive input values and still evaluates
+#' statistical significance against a null of 1 rather than 0 — both of which are
+#' incorrect for a difference-scale measure. This is a known, currently unaddressed
+#' limitation; `agreement_metrics()` is designed for ratio-scale effect measures
+#' (HR, OR, RR, IRR) beyond just the SMD calculation.
 #'
 #' @importFrom tidyr pivot_wider pivot_longer
 #' @importFrom smd smd
@@ -39,6 +51,16 @@
 #' includes a matching abbreviation definition (e.g. "HR = Hazard ratio"); any other value is
 #' used as-is for the header without adding an abbreviation definition to the footnote.
 #' @param smd_threshold Numeric. Threshold for SMD agreement. Default: 1.96 (alpha=0.05)
+#' @param smd_scale Character. Which transform to apply to the RCT/RWE estimates and
+#' confidence limits before computing the SMD. One of "log" (default), "identity", or
+#' "logit". "log" is appropriate for ratio-scale measures (HR, OR, RR, IRR), since their
+#' confidence intervals are constructed via the delta method on the log scale. "identity"
+#' skips the transform, for measures already on an additive/difference scale (e.g. risk
+#' differences). "logit" is for proportions bounded on \[0, 1\]. Each option expects
+#' inputs in a particular domain (log: > 0; logit: strictly between 0 and 1; identity:
+#' any real number); values outside that domain will silently produce an "NA" SMD
+#' agreement result for that row rather than raising an error. See Details for a
+#' related limitation that `smd_scale` does not address.
 #' @param metrics Character vector. Which agreement metrics to compute and display.
 #' Must be a subset of "significance_agreement", "estimate_agreement", "smd_agreement".
 #' Default: all three. Metrics excluded here are skipped entirely (not computed), which
@@ -108,7 +130,8 @@ agreement_metrics <- function(
     "smd_agreement"
   ), # which agreement metrics to compute and display
   show_aggregate = FALSE, # add a per-metric pooled agreement % summary row
-  show_aggregate_total = TRUE # add a pooled agreement % source note across all metrics
+  show_aggregate_total = TRUE, # add a pooled agreement % source note across all metrics
+  smd_scale = c("log", "identity", "logit") # transform applied before the SMD calculation
 ) {
   # input checks
   assertthat::assert_that(
@@ -173,6 +196,8 @@ agreement_metrics <- function(
     msg = "<show_aggregate_total> must be a single logical value"
   )
 
+  smd_scale <- match.arg(smd_scale)
+
   # check for non-positive values
   assertthat::assert_that(
     all(x$rct_estimate > 0),
@@ -185,18 +210,25 @@ agreement_metrics <- function(
 
   # if no smd_value present in the results table, calculate it
   if ("smd_agreement" %in% metrics && !"smd_value" %in% colnames(x)) {
+    transform_fn <- switch(
+      smd_scale,
+      log = log,
+      identity = identity,
+      logit = stats::qlogis
+    )
+
     x <- x |>
       dplyr::rowwise() |>
       dplyr::mutate(
         smd_value = tryCatch(
           {
             smd_agreement(
-              rct_estimate = log(rct_estimate),
-              rct_lower = log(rct_lower),
-              rct_upper = log(rct_upper),
-              rwe_estimate = log(rwe_estimate),
-              rwe_lower = log(rwe_lower),
-              rwe_upper = log(rwe_upper)
+              rct_estimate = transform_fn(rct_estimate),
+              rct_lower = transform_fn(rct_lower),
+              rct_upper = transform_fn(rct_upper),
+              rwe_estimate = transform_fn(rwe_estimate),
+              rwe_lower = transform_fn(rwe_lower),
+              rwe_upper = transform_fn(rwe_upper)
             )
           },
           error = function(e) {
@@ -373,13 +405,20 @@ agreement_metrics <- function(
     NULL
   )
 
+  smd_scale_label <- switch(
+    smd_scale,
+    log = "based on log-transformed estimates",
+    identity = "based on estimates' original scale",
+    logit = "based on logit-transformed estimates"
+  )
+
   abbrev_parts <- c(
     "CI = Confidence interval",
     footnote_label,
     "RCT = Randomized controlled trial",
     "RWE = Real-world evidence",
     if ("smd_agreement" %in% metrics) {
-      "SMD = standardized mean difference (based on log hazard ratios)"
+      sprintf("SMD = standardized mean difference (%s)", smd_scale_label)
     }
   )
   abbreviations <- paste0(
