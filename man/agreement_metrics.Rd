@@ -10,7 +10,9 @@ agreement_metrics(
   group_col = NULL,
   estimate_label = "HR (95\% CI)",
   smd_threshold = 1.96,
-  metrics = c("significance_agreement", "estimate_agreement", "smd_agreement")
+  metrics = c("significance_agreement", "estimate_agreement", "smd_agreement"),
+  show_aggregate = FALSE,
+  show_aggregate_total = TRUE
 )
 }
 \arguments{
@@ -41,6 +43,15 @@ Must be a subset of "significance_agreement", "estimate_agreement", "smd_agreeme
 Default: all three. Metrics excluded here are skipped entirely (not computed), which
 is most relevant for "smd_agreement" since it is the most expensive metric to compute
 and may not be meaningful for all effect size types.}
+
+\item{show_aggregate}{Logical. If TRUE, adds a summary row at the bottom of the table
+with the pooled agreement percentage for each selected metric (Yes / (Yes + No) across
+all rows, excluding "NA" cells, e.g. failed SMD calculations, from the denominator).
+Default: FALSE.}
+
+\item{show_aggregate_total}{Logical. If TRUE, adds a source note below the table with
+a single agreement percentage pooled across all selected metrics and all rows combined,
+using the same Yes / (Yes + No) logic as \code{show_aggregate}. Default: TRUE.}
 }
 \value{
 A gt table object with formatted agreement metrics

@@ -268,3 +268,110 @@ test_that("agreement_metrics orders metric columns canonically regardless of met
   )
   expect_equal(metric_cols, c("significance_agreement", "estimate_agreement"))
 })
+
+test_that("agreement_metrics show_aggregate_total is on by default and shows the correct pooled percentage", {
+  # "Perfect" agrees on all metrics (Yes/Yes/Yes), "Disagree" agrees on none
+  # (No/No/No) -> pooled across all 3 metrics and 2 rows = 3 Yes / 6 total
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Perfect", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "Disagree", 0.5, 0.4, 0.6, 2.0, 1.8, 2.2
+  )
+
+  result <- agreement_metrics(x, analysis_col = "Analysis")
+  expect_length(result[["_source_notes"]], 1)
+  expect_true(stringr::str_detect(
+    result[["_source_notes"]][[1]],
+    "Overall agreement across all metrics: 50% \\(3/6\\)"
+  ))
+
+  result_off <- agreement_metrics(x, analysis_col = "Analysis", show_aggregate_total = FALSE)
+  expect_length(result_off[["_source_notes"]], 0)
+})
+
+test_that("agreement_metrics show_aggregate adds a per-metric summary row and renders without error", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Perfect", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "Disagree", 0.5, 0.4, 0.6, 2.0, 1.8, 2.2
+  )
+
+  result_off <- agreement_metrics(x, analysis_col = "Analysis")
+  expect_length(result_off[["_summary"]], 0)
+
+  result <- agreement_metrics(x, analysis_col = "Analysis", show_aggregate = TRUE)
+  expect_length(result[["_summary"]], 1)
+
+  # gt::grand_summary_rows() evaluates its summary functions lazily at
+  # render time, so only rendering (not just inspecting `_summary`) can
+  # catch a summary function that fails to resolve at that point
+  html <- gt::as_raw_html(result)
+  expect_true(stringr::str_detect(html, "% Agreement"))
+  expect_true(stringr::str_detect(html, "50%"))
+})
+
+test_that("agreement_metrics show_aggregate and show_aggregate_total pool only the selected metrics subset", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Perfect", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "Disagree", 0.5, 0.4, 0.6, 2.0, 1.8, 2.2
+  )
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = c("significance_agreement", "estimate_agreement"),
+    show_aggregate = TRUE
+  )
+
+  summary_columns <- result[["_summary"]][[1]][["columns"]]
+  expect_equal(summary_columns, c("significance_agreement", "estimate_agreement"))
+
+  # pooled across the 2 selected metrics x 2 rows = 2 Yes / 4 total
+  expect_true(stringr::str_detect(
+    result[["_source_notes"]][[1]],
+    "Overall agreement across all metrics: 50% \\(2/4\\)"
+  ))
+
+  html <- gt::as_raw_html(result)
+  expect_true(stringr::str_detect(html, "50%"))
+})
+
+test_that("agreement_metrics aggregate helpers handle an all-NA metric without erroring", {
+  # degenerate RCT bounds (lower == upper) make every row's SMD calculation
+  # fail, leaving smd_agreement == "NA" for all rows -> zero-row denominator
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Degenerate 1", 0.87, 0.87, 0.87, 0.82, 0.76, 0.87,
+    "Degenerate 2", 0.80, 0.80, 0.80, 0.75, 0.65, 0.85
+  )
+
+  result <- suppressWarnings(agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement",
+    show_aggregate = TRUE
+  ))
+
+  expect_true(stringr::str_detect(result[["_source_notes"]][[1]], "NA"))
+  # gt::grand_summary_rows() evaluates its summary functions lazily at
+  # render time, so rendering (not just inspecting `_summary`) is required
+  # to confirm a zero-denominator metric doesn't error when the table is built
+  expect_no_error(gt::as_raw_html(result))
+})
+
+test_that("agreement_metrics validates show_aggregate and show_aggregate_total", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", show_aggregate = "yes"),
+    "<show_aggregate> must be a single logical value"
+  )
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", show_aggregate_total = c(TRUE, FALSE)),
+    "<show_aggregate_total> must be a single logical value"
+  )
+})

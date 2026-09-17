@@ -44,6 +44,13 @@
 #' Default: all three. Metrics excluded here are skipped entirely (not computed), which
 #' is most relevant for "smd_agreement" since it is the most expensive metric to compute
 #' and may not be meaningful for all effect size types.
+#' @param show_aggregate Logical. If TRUE, adds a summary row at the bottom of the table
+#' with the pooled agreement percentage for each selected metric (Yes / (Yes + No) across
+#' all rows, excluding "NA" cells, e.g. failed SMD calculations, from the denominator).
+#' Default: FALSE.
+#' @param show_aggregate_total Logical. If TRUE, adds a source note below the table with
+#' a single agreement percentage pooled across all selected metrics and all rows combined,
+#' using the same Yes / (Yes + No) logic as `show_aggregate`. Default: TRUE.
 #'
 #' @return A gt table object with formatted agreement metrics
 #'
@@ -99,7 +106,9 @@ agreement_metrics <- function(
     "significance_agreement",
     "estimate_agreement",
     "smd_agreement"
-  ) # which agreement metrics to compute and display
+  ), # which agreement metrics to compute and display
+  show_aggregate = FALSE, # add a per-metric pooled agreement % summary row
+  show_aggregate_total = TRUE # add a pooled agreement % source note across all metrics
 ) {
   # input checks
   assertthat::assert_that(
@@ -154,6 +163,15 @@ agreement_metrics <- function(
   # canonicalize order so output columns/labels/styling are stable
   # regardless of the order metrics was supplied in
   metrics <- valid_metrics[valid_metrics %in% metrics]
+
+  assertthat::assert_that(
+    is.logical(show_aggregate) && length(show_aggregate) == 1,
+    msg = "<show_aggregate> must be a single logical value"
+  )
+  assertthat::assert_that(
+    is.logical(show_aggregate_total) && length(show_aggregate_total) == 1,
+    msg = "<show_aggregate_total> must be a single logical value"
+  )
 
   # check for non-positive values
   assertthat::assert_that(
@@ -265,6 +283,21 @@ agreement_metrics <- function(
       dplyr::group_by(dplyr::across(dplyr::all_of(group_col)))
   }
 
+  # pooled "Yes / (Yes + No)" agreement percentage for a metric column;
+  # "NA" cells (e.g. failed SMD calculations) are excluded from the
+  # denominator. Works on both plain "Yes"/"No" columns and the glued
+  # "Yes (0.32)"-style smd_agreement display column via str_detect
+  pct_agreement <- function(col) {
+    yes <- sum(stringr::str_detect(as.character(col), "Yes"))
+    no <- sum(stringr::str_detect(as.character(col), "No"))
+    n <- yes + no
+    if (n == 0) {
+      NA_character_
+    } else {
+      sprintf("%.0f%% (%d/%d)", 100 * yes / n, yes, n)
+    }
+  }
+
   # create and format gt table
   all_labels <- list(
     significance_agreement = gt::md(
@@ -309,6 +342,28 @@ agreement_metrics <- function(
       )
   }
 
+  # per-metric pooled agreement % summary row
+  # note: the summary function is inlined (rather than calling the local
+  # pct_agreement() helper) because gt evaluates <fns> lazily at render
+  # time, outside the scope in which a local closure would be resolvable
+  if (show_aggregate) {
+    x_gt <- x_gt |>
+      gt::grand_summary_rows(
+        columns = dplyr::all_of(metrics),
+        fns = list(`% Agreement` = ~ {
+          yes <- sum(stringr::str_detect(as.character(.), "Yes"))
+          no <- sum(stringr::str_detect(as.character(.), "No"))
+          n <- yes + no
+          if (n == 0) {
+            NA_character_
+          } else {
+            sprintf("%.0f%% (%d/%d)", 100 * yes / n, yes, n)
+          }
+        }),
+        missing_text = "--"
+      )
+  }
+
   # footnote estimate label
   footnote_label <- switch(
     estimate_label,
@@ -347,6 +402,15 @@ agreement_metrics <- function(
       locations = gt::cells_row_groups()
     ) |>
     gt::tab_footnote(abbreviations)
+
+  # pooled agreement % across all selected metrics combined
+  if (show_aggregate_total) {
+    total_pct <- pct_agreement(unlist(x_format[metrics]))
+    x_gt <- x_gt |>
+      gt::tab_source_note(
+        glue::glue("Overall agreement across all metrics: {total_pct}")
+      )
+  }
 
   return(x_gt)
 }
