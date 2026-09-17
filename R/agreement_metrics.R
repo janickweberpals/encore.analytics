@@ -4,12 +4,17 @@
 #' with real-world evidence (RWE) emulation studies by calculating agreement metrics.
 #'
 #' @details
-#' Calculates three types of agreement metrics:
+#' Calculates up to three types of agreement metrics, controlled via the `metrics`
+#' argument:
 #' - Statistical significance agreement: RCT and RWE confidence intervals fall on the
 #'   same side of the null value of 1 (both entirely above, both entirely below, or
 #'   both include the null, i.e. both non-significant)
 #' - Estimate agreement: RWE estimate within RCT confidence interval
 #' - SMD agreement: Standardized mean difference below threshold (default 1.96)
+#'
+#' Metrics excluded via `metrics` are not computed at all (not just hidden from
+#' the output), which is relevant for the SMD calculation in particular, since it
+#' is the most expensive step and may not be meaningful for all effect size types.
 #'
 #' All estimates should be hazard ratios (HR) and must be positive.
 #' Estimates are log-transformed for SMD calculation.
@@ -34,6 +39,11 @@
 #' includes a matching abbreviation definition (e.g. "HR = Hazard ratio"); any other value is
 #' used as-is for the header without adding an abbreviation definition to the footnote.
 #' @param smd_threshold Numeric. Threshold for SMD agreement. Default: 1.96 (alpha=0.05)
+#' @param metrics Character vector. Which agreement metrics to compute and display.
+#' Must be a subset of "significance_agreement", "estimate_agreement", "smd_agreement".
+#' Default: all three. Metrics excluded here are skipped entirely (not computed), which
+#' is most relevant for "smd_agreement" since it is the most expensive metric to compute
+#' and may not be meaningful for all effect size types.
 #'
 #' @return A gt table object with formatted agreement metrics
 #'
@@ -84,7 +94,12 @@ agreement_metrics <- function(
   analysis_col,
   group_col = NULL, # subgroup, e.g, database
   estimate_label = "HR (95% CI)",
-  smd_threshold = 1.96 # customizable threshold for SMD agreement
+  smd_threshold = 1.96, # customizable threshold for SMD agreement
+  metrics = c(
+    "significance_agreement",
+    "estimate_agreement",
+    "smd_agreement"
+  ) # which agreement metrics to compute and display
 ) {
   # input checks
   assertthat::assert_that(
@@ -120,6 +135,26 @@ agreement_metrics <- function(
     )
   }
 
+  valid_metrics <- c(
+    "significance_agreement",
+    "estimate_agreement",
+    "smd_agreement"
+  )
+  assertthat::assert_that(
+    is.character(metrics) && length(metrics) >= 1,
+    msg = "<metrics> must be a non-empty character vector"
+  )
+  assertthat::assert_that(
+    all(metrics %in% valid_metrics),
+    msg = sprintf(
+      "<metrics> must be a subset of: %s",
+      paste(valid_metrics, collapse = ", ")
+    )
+  )
+  # canonicalize order so output columns/labels/styling are stable
+  # regardless of the order metrics was supplied in
+  metrics <- valid_metrics[valid_metrics %in% metrics]
+
   # check for non-positive values
   assertthat::assert_that(
     all(x$rct_estimate > 0),
@@ -131,7 +166,7 @@ agreement_metrics <- function(
   )
 
   # if no smd_value present in the results table, calculate it
-  if (!"smd_value" %in% colnames(x)) {
+  if ("smd_agreement" %in% metrics && !"smd_value" %in% colnames(x)) {
     x <- x |>
       dplyr::rowwise() |>
       dplyr::mutate(
@@ -155,38 +190,48 @@ agreement_metrics <- function(
       dplyr::ungroup()
   }
 
-  # calculate agreement metrics
-  x <- x |>
-    dplyr::mutate(
-      # significance agreement: RCT and RWE agree if their CIs fall in the
-      # same position relative to the null (both entirely above, both
-      # entirely below, or both straddling/touching it)
-      significance_agreement = dplyr::case_when(
-        # both significantly above the null
-        rct_lower > 1 & rwe_lower > 1 ~ "Yes",
-        # both significantly below the null
-        rct_upper < 1 & rwe_upper < 1 ~ "Yes",
-        # both null (CI includes 1)
-        (rct_lower <= 1 & rct_upper >= 1) &
-          (rwe_lower <= 1 & rwe_upper >= 1) ~ "Yes",
-        # all other cases
-        TRUE ~ "No"
-      ),
-
-      # estimate agreement
-      estimate_agreement = dplyr::if_else(
-        rwe_estimate >= rct_lower & rwe_estimate <= rct_upper,
-        "Yes",
-        "No"
-      ),
-
-      # smd agreement using parameter
-      smd_agreement = dplyr::case_when(
-        is.na(smd_value) ~ "NA",
-        abs(smd_value) < smd_threshold ~ "Yes",
-        TRUE ~ "No"
+  # calculate agreement metrics (only the ones requested via <metrics>)
+  if ("significance_agreement" %in% metrics) {
+    x <- x |>
+      dplyr::mutate(
+        # significance agreement: RCT and RWE agree if their CIs fall in the
+        # same position relative to the null (both entirely above, both
+        # entirely below, or both straddling/touching it)
+        significance_agreement = dplyr::case_when(
+          # both significantly above the null
+          rct_lower > 1 & rwe_lower > 1 ~ "Yes",
+          # both significantly below the null
+          rct_upper < 1 & rwe_upper < 1 ~ "Yes",
+          # both null (CI includes 1)
+          (rct_lower <= 1 & rct_upper >= 1) &
+            (rwe_lower <= 1 & rwe_upper >= 1) ~ "Yes",
+          # all other cases
+          TRUE ~ "No"
+        )
       )
-    )
+  }
+
+  if ("estimate_agreement" %in% metrics) {
+    x <- x |>
+      dplyr::mutate(
+        estimate_agreement = dplyr::if_else(
+          rwe_estimate >= rct_lower & rwe_estimate <= rct_upper,
+          "Yes",
+          "No"
+        )
+      )
+  }
+
+  if ("smd_agreement" %in% metrics) {
+    x <- x |>
+      dplyr::mutate(
+        smd_agreement = dplyr::case_when(
+          is.na(smd_value) ~ "NA",
+          abs(smd_value) < smd_threshold ~ "Yes",
+          TRUE ~ "No"
+        )
+      )
+  }
 
   # format table for display
   x_format <- x |>
@@ -196,16 +241,22 @@ agreement_metrics <- function(
     )) |>
     dplyr::mutate(
       RCT = glue::glue("{rct_estimate} ({rct_lower} - {rct_upper})"),
-      RWE = glue::glue("{rwe_estimate} ({rwe_lower} - {rwe_upper})"),
-      smd_agreement = glue::glue("{smd_agreement} ({smd_value})")
-    ) |>
+      RWE = glue::glue("{rwe_estimate} ({rwe_lower} - {rwe_upper})")
+    )
+
+  if ("smd_agreement" %in% metrics) {
+    x_format <- x_format |>
+      dplyr::mutate(
+        smd_agreement = glue::glue("{smd_agreement} ({smd_value})")
+      )
+  }
+
+  x_format <- x_format |>
     dplyr::select(
       dplyr::all_of(c(analysis_col, group_col)),
       "RCT",
       "RWE",
-      "significance_agreement",
-      "estimate_agreement",
-      "smd_agreement"
+      dplyr::all_of(metrics)
     )
 
   # conditional grouping
@@ -215,26 +266,24 @@ agreement_metrics <- function(
   }
 
   # create and format gt table
+  all_labels <- list(
+    significance_agreement = gt::md(
+      "Statistical <br> significance <br> agreement"
+    ),
+    estimate_agreement = gt::md("Estimate <br> agreement"),
+    smd_agreement = "SMD"
+  )
+
   x_gt <- x_format |>
     gt::gt() |>
     gt::tab_spanner(
       label = estimate_label,
       columns = c("RCT", "RWE")
     ) |>
-    gt::cols_label(
-      significance_agreement = gt::md(
-        "Statistical <br> significance <br> agreement"
-      ),
-      estimate_agreement = gt::md("Estimate <br> agreement"),
-      smd_agreement = "SMD"
-    )
+    gt::cols_label(!!!all_labels[metrics])
 
   # apply styles for agreement columns
-  for (col in c(
-    "significance_agreement",
-    "estimate_agreement",
-    "smd_agreement"
-  )) {
+  for (col in metrics) {
     x_gt <- x_gt |>
       gt::tab_style(
         style = gt::cell_text(color = "darkgreen"),
@@ -269,12 +318,19 @@ agreement_metrics <- function(
     NULL
   )
 
-  abbreviations <- "Abbreviations: CI = Confidence interval, RCT = Randomized controlled trial, RWE = Real-world evidence, SMD = standardized mean difference (based on log hazard ratios)"
-  if (!is.null(footnote_label)) {
-    abbreviations <- glue::glue(
-      "Abbreviations: CI = Confidence interval, {footnote_label}, RCT = Randomized controlled trial, RWE = Real-world evidence, SMD = standardized mean difference (based on log hazard ratios)"
-    )
-  }
+  abbrev_parts <- c(
+    "CI = Confidence interval",
+    footnote_label,
+    "RCT = Randomized controlled trial",
+    "RWE = Real-world evidence",
+    if ("smd_agreement" %in% metrics) {
+      "SMD = standardized mean difference (based on log hazard ratios)"
+    }
+  )
+  abbreviations <- paste0(
+    "Abbreviations: ",
+    paste(abbrev_parts, collapse = ", ")
+  )
 
   # Add bold styling for headers
   x_gt <- x_gt |>

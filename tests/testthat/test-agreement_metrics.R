@@ -179,3 +179,92 @@ test_that("agreement_metrics significance_agreement agrees when both RCT and RWE
   result <- agreement_metrics(x, analysis_col = "Analysis")
   expect_equal(result[["_data"]][["significance_agreement"]], "Yes")
 })
+
+test_that("agreement_metrics metrics argument selects which columns are computed and displayed", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = c("significance_agreement", "estimate_agreement")
+  )
+  expect_true(all(
+    c("significance_agreement", "estimate_agreement") %in%
+      colnames(result[["_data"]])
+  ))
+  expect_false("smd_agreement" %in% colnames(result[["_data"]]))
+
+  footnote <- result[["_footnotes"]][["footnotes"]][[1]]
+  expect_false(stringr::str_detect(footnote, "SMD ="))
+
+  result_smd_only <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement"
+  )
+  expect_false(any(
+    c("significance_agreement", "estimate_agreement") %in%
+      colnames(result_smd_only[["_data"]])
+  ))
+  expect_true("smd_agreement" %in% colnames(result_smd_only[["_data"]]))
+})
+
+test_that("agreement_metrics skips the SMD calculation entirely when smd_agreement is excluded", {
+  # degenerate RCT bounds (lower == upper) make the smd_agreement() helper
+  # stop(), which agreement_metrics() converts into a warning + NA smd_value
+  # only when smd_agreement is actually requested and thus computed
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Degenerate RCT bounds", 0.87, 0.87, 0.87, 0.82, 0.76, 0.87
+  )
+
+  expect_warning(
+    agreement_metrics(x, analysis_col = "Analysis"),
+    "SMD calculation failed"
+  )
+
+  expect_no_warning(
+    agreement_metrics(
+      x,
+      analysis_col = "Analysis",
+      metrics = c("significance_agreement", "estimate_agreement")
+    )
+  )
+})
+
+test_that("agreement_metrics validates the metrics argument", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", metrics = "bogus"),
+    "<metrics> must be a subset of"
+  )
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", metrics = character(0)),
+    "<metrics> must be a non-empty character vector"
+  )
+})
+
+test_that("agreement_metrics orders metric columns canonically regardless of metrics input order", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = c("estimate_agreement", "significance_agreement")
+  )
+  metric_cols <- intersect(
+    colnames(result[["_data"]]),
+    c("significance_agreement", "estimate_agreement", "smd_agreement")
+  )
+  expect_equal(metric_cols, c("significance_agreement", "estimate_agreement"))
+})

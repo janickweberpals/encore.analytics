@@ -9,7 +9,8 @@ agreement_metrics(
   analysis_col,
   group_col = NULL,
   estimate_label = "HR (95\% CI)",
-  smd_threshold = 1.96
+  smd_threshold = 1.96,
+  metrics = c("significance_agreement", "estimate_agreement", "smd_agreement")
 )
 }
 \arguments{
@@ -34,6 +35,12 @@ includes a matching abbreviation definition (e.g. "HR = Hazard ratio"); any othe
 used as-is for the header without adding an abbreviation definition to the footnote.}
 
 \item{smd_threshold}{Numeric. Threshold for SMD agreement. Default: 1.96 (alpha=0.05)}
+
+\item{metrics}{Character vector. Which agreement metrics to compute and display.
+Must be a subset of "significance_agreement", "estimate_agreement", "smd_agreement".
+Default: all three. Metrics excluded here are skipped entirely (not computed), which
+is most relevant for "smd_agreement" since it is the most expensive metric to compute
+and may not be meaningful for all effect size types.}
 }
 \value{
 A gt table object with formatted agreement metrics
@@ -43,7 +50,8 @@ Creates a formatted table comparing results from randomized controlled trials (R
 with real-world evidence (RWE) emulation studies by calculating agreement metrics.
 }
 \details{
-Calculates three types of agreement metrics:
+Calculates up to three types of agreement metrics, controlled via the \code{metrics}
+argument:
 \itemize{
 \item Statistical significance agreement: RCT and RWE confidence intervals fall on the
 same side of the null value of 1 (both entirely above, both entirely below, or
@@ -51,6 +59,10 @@ both include the null, i.e. both non-significant)
 \item Estimate agreement: RWE estimate within RCT confidence interval
 \item SMD agreement: Standardized mean difference below threshold (default 1.96)
 }
+
+Metrics excluded via \code{metrics} are not computed at all (not just hidden from
+the output), which is relevant for the SMD calculation in particular, since it
+is the most expensive step and may not be meaningful for all effect size types.
 
 All estimates should be hazard ratios (HR) and must be positive.
 Estimates are log-transformed for SMD calculation.
