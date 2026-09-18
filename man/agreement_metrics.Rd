@@ -52,7 +52,10 @@ Default: FALSE.}
 
 \item{show_aggregate_total}{Logical. If TRUE, adds a source note below the table with
 a single agreement percentage pooled across all selected metrics and all rows combined,
-using the same Yes / (Yes + No) logic as \code{show_aggregate}. Default: TRUE.}
+using the same Yes / (Yes + No) logic as \code{show_aggregate}. Default: TRUE. When TRUE, the
+formatted percentage string (e.g. "78\% (109/140)") is also attached directly to the
+returned gt object as \code{show_aggregate_total}, so it can be accessed programmatically
+(e.g. \code{result$show_aggregate_total}) without parsing it back out of the source note text.}
 
 \item{smd_scale}{Character. Which transform to apply to the RCT/RWE estimates and
 confidence limits before computing the SMD. One of "log" (default), "identity", or

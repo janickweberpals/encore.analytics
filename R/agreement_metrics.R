@@ -72,7 +72,10 @@
 #' Default: FALSE.
 #' @param show_aggregate_total Logical. If TRUE, adds a source note below the table with
 #' a single agreement percentage pooled across all selected metrics and all rows combined,
-#' using the same Yes / (Yes + No) logic as `show_aggregate`. Default: TRUE.
+#' using the same Yes / (Yes + No) logic as `show_aggregate`. Default: TRUE. When TRUE, the
+#' formatted percentage string (e.g. "78% (109/140)") is also attached directly to the
+#' returned gt object as `show_aggregate_total`, so it can be accessed programmatically
+#' (e.g. `result$show_aggregate_total`) without parsing it back out of the source note text.
 #'
 #' @return A gt table object with formatted agreement metrics
 #'
@@ -449,6 +452,9 @@ agreement_metrics <- function(
       gt::tab_source_note(
         glue::glue("Overall agreement across all metrics: {total_pct}")
       )
+    # also expose the pooled percentage directly on the returned object,
+    # so callers don't have to parse it back out of the source note text
+    x_gt$show_aggregate_total <- total_pct
   }
 
   return(x_gt)

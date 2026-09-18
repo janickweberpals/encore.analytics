@@ -289,6 +289,20 @@ test_that("agreement_metrics show_aggregate_total is on by default and shows the
   expect_length(result_off[["_source_notes"]], 0)
 })
 
+test_that("agreement_metrics exposes the pooled total percentage directly on the returned object", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Perfect", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "Disagree", 0.5, 0.4, 0.6, 2.0, 1.8, 2.2
+  )
+
+  result <- agreement_metrics(x, analysis_col = "Analysis")
+  expect_equal(result$show_aggregate_total, "50% (3/6)")
+
+  result_off <- agreement_metrics(x, analysis_col = "Analysis", show_aggregate_total = FALSE)
+  expect_null(result_off$show_aggregate_total)
+})
+
 test_that("agreement_metrics show_aggregate adds a per-metric summary row and renders without error", {
   x <- tibble::tribble(
     ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
