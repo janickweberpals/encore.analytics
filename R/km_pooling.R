@@ -161,11 +161,17 @@
 #'  # KM curve
 #'  km_out$km_plot
 #'
-#'  # pass additional arguments to the underlying survfit2() call
-#'  km_out_fh <- km_pooling(
+#'  # pass additional arguments to the underlying survfit2() call:
+#'  # pass a column-based NSE argument (e.g. id = patientid) through `...`;
+#'  # patientid is resolved as a column of each imputed/weighted dataset.
+#'  # survfit() uses `id` as the subject identifier for its robust/sandwich
+#'  # variance calculation, clustering rows by patient instead of treating
+#'  # each row as its own independent cluster (relevant if a patient can
+#'  # contribute more than one row, e.g. with time-varying covariates).
+#'  km_out_id <- km_pooling(
 #'    x = wimids,
 #'    surv_formula = km_fit,
-#'    type = "fleming-harrington"
+#'    id = patientid
 #'    )
 #'
 km_pooling <- function(
