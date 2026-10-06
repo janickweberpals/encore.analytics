@@ -13,7 +13,7 @@ agreement_metrics(
   metrics = c("significance_agreement", "estimate_agreement", "smd_agreement"),
   show_aggregate = FALSE,
   show_aggregate_total = TRUE,
-  smd_scale = c("log", "identity", "logit")
+  smd_scale = c("log", "identity", "logit", "loglog")
 )
 }
 \arguments{
@@ -58,15 +58,21 @@ returned gt object as \code{show_aggregate_total}, so it can be accessed program
 (e.g. \code{result$show_aggregate_total}) without parsing it back out of the source note text.}
 
 \item{smd_scale}{Character. Which transform to apply to the RCT/RWE estimates and
-confidence limits before computing the SMD. One of "log" (default), "identity", or
-"logit". "log" is appropriate for ratio-scale measures (HR, OR, RR, IRR), since their
-confidence intervals are constructed via the delta method on the log scale. "identity"
-skips the transform, for measures already on an additive/difference scale (e.g. risk
-differences). "logit" is for proportions bounded on [0, 1]. Each option expects
-inputs in a particular domain (log: > 0; logit: strictly between 0 and 1; identity:
+confidence limits before computing the SMD. One of "log" (default), "identity",
+"logit", or "loglog". "log" is appropriate for ratio-scale measures (HR, OR, RR, IRR),
+since their confidence intervals are constructed via the delta method on the log
+scale. "identity" skips the transform, for measures already on an additive/difference
+scale (e.g. risk differences). "logit" is for proportions bounded on [0, 1].
+"loglog" is the complementary log-log transform, \code{log(-log(p))}, and is the correct
+scale for comparing survival probabilities (e.g. Kaplan-Meier estimates such as those
+from \code{\link[=km_pooling]{km_pooling()}}) — it matches the "log-log" confidence interval method used by
+\code{survival::survfit()} (\code{conf.type = "log-log"}). Each option expects inputs in a
+particular domain (log: > 0; logit and loglog: strictly between 0 and 1; identity:
 any real number); values outside that domain will silently produce an "NA" SMD
-agreement result for that row rather than raising an error. See Details for a
-related limitation that \code{smd_scale} does not address.}
+agreement result for that row rather than raising an error. "loglog" is a decreasing
+function of its input, so the lower/upper confidence limits are automatically
+reordered after transforming to preserve the lower-less-than-upper invariant required
+internally. See Details for a related limitation that \code{smd_scale} does not address.}
 }
 \value{
 A gt table object with formatted agreement metrics

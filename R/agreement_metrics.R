@@ -52,15 +52,21 @@
 #' used as-is for the header without adding an abbreviation definition to the footnote.
 #' @param smd_threshold Numeric. Threshold for SMD agreement. Default: 1.96 (alpha=0.05)
 #' @param smd_scale Character. Which transform to apply to the RCT/RWE estimates and
-#' confidence limits before computing the SMD. One of "log" (default), "identity", or
-#' "logit". "log" is appropriate for ratio-scale measures (HR, OR, RR, IRR), since their
-#' confidence intervals are constructed via the delta method on the log scale. "identity"
-#' skips the transform, for measures already on an additive/difference scale (e.g. risk
-#' differences). "logit" is for proportions bounded on \[0, 1\]. Each option expects
-#' inputs in a particular domain (log: > 0; logit: strictly between 0 and 1; identity:
+#' confidence limits before computing the SMD. One of "log" (default), "identity",
+#' "logit", or "loglog". "log" is appropriate for ratio-scale measures (HR, OR, RR, IRR),
+#' since their confidence intervals are constructed via the delta method on the log
+#' scale. "identity" skips the transform, for measures already on an additive/difference
+#' scale (e.g. risk differences). "logit" is for proportions bounded on \[0, 1\].
+#' "loglog" is the complementary log-log transform, `log(-log(p))`, and is the correct
+#' scale for comparing survival probabilities (e.g. Kaplan-Meier estimates such as those
+#' from [km_pooling()]) — it matches the "log-log" confidence interval method used by
+#' `survival::survfit()` (`conf.type = "log-log"`). Each option expects inputs in a
+#' particular domain (log: > 0; logit and loglog: strictly between 0 and 1; identity:
 #' any real number); values outside that domain will silently produce an "NA" SMD
-#' agreement result for that row rather than raising an error. See Details for a
-#' related limitation that `smd_scale` does not address.
+#' agreement result for that row rather than raising an error. "loglog" is a decreasing
+#' function of its input, so the lower/upper confidence limits are automatically
+#' reordered after transforming to preserve the lower-less-than-upper invariant required
+#' internally. See Details for a related limitation that `smd_scale` does not address.
 #' @param metrics Character vector. Which agreement metrics to compute and display.
 #' Must be a subset of "significance_agreement", "estimate_agreement", "smd_agreement".
 #' Default: all three. Metrics excluded here are skipped entirely (not computed), which
@@ -134,7 +140,7 @@ agreement_metrics <- function(
   ), # which agreement metrics to compute and display
   show_aggregate = FALSE, # add a per-metric pooled agreement % summary row
   show_aggregate_total = TRUE, # add a pooled agreement % source note across all metrics
-  smd_scale = c("log", "identity", "logit") # transform applied before the SMD calculation
+  smd_scale = c("log", "identity", "logit", "loglog") # transform applied before the SMD calculation
 ) {
   # input checks
   assertthat::assert_that(
@@ -217,7 +223,10 @@ agreement_metrics <- function(
       smd_scale,
       log = log,
       identity = identity,
-      logit = stats::qlogis
+      logit = stats::qlogis,
+      # complementary log-log: correct scale for comparing survival
+      # probabilities (matches survival::survfit(conf.type = "log-log"))
+      loglog = function(p) log(-log(p))
     )
 
     x <- x |>
@@ -225,13 +234,21 @@ agreement_metrics <- function(
       dplyr::mutate(
         smd_value = tryCatch(
           {
+            # loglog is a decreasing function of its input, unlike the other
+            # transforms; pmin()/pmax() re-sort the transformed bounds so
+            # <lower> stays below <upper> regardless of the transform's
+            # direction (a no-op for the increasing transforms above)
+            rct_t_lower <- transform_fn(rct_lower)
+            rct_t_upper <- transform_fn(rct_upper)
+            rwe_t_lower <- transform_fn(rwe_lower)
+            rwe_t_upper <- transform_fn(rwe_upper)
             smd_agreement(
               rct_estimate = transform_fn(rct_estimate),
-              rct_lower = transform_fn(rct_lower),
-              rct_upper = transform_fn(rct_upper),
+              rct_lower = pmin(rct_t_lower, rct_t_upper),
+              rct_upper = pmax(rct_t_lower, rct_t_upper),
               rwe_estimate = transform_fn(rwe_estimate),
-              rwe_lower = transform_fn(rwe_lower),
-              rwe_upper = transform_fn(rwe_upper)
+              rwe_lower = pmin(rwe_t_lower, rwe_t_upper),
+              rwe_upper = pmax(rwe_t_lower, rwe_t_upper)
             )
           },
           error = function(e) {
@@ -412,7 +429,8 @@ agreement_metrics <- function(
     smd_scale,
     log = "based on log-transformed estimates",
     identity = "based on estimates' original scale",
-    logit = "based on logit-transformed estimates"
+    logit = "based on logit-transformed estimates",
+    loglog = "based on log-log-transformed survival probabilities"
   )
 
   abbrev_parts <- c(

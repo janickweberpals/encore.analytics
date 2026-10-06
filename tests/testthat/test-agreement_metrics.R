@@ -471,6 +471,44 @@ test_that("agreement_metrics smd_scale = 'logit' applies the logit transform", {
   ))
 })
 
+test_that("agreement_metrics smd_scale = 'loglog' applies the complementary log-log transform for survival probabilities", {
+  # survival-probability-like data: RCT/RWE estimate within (lower, upper),
+  # all values strictly between 0 and 1
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.75, 0.70, 0.80, 0.70, 0.65, 0.75
+  )
+
+  cloglog <- function(p) log(-log(p))
+  expected_smd <- {
+    num <- cloglog(0.75) - cloglog(0.70)
+    # cloglog() is a *decreasing* function of p, so the transformed lower
+    # bound is numerically larger than the transformed upper bound -- sort()
+    # mirrors the reordering agreement_metrics() must apply internally
+    rct_t <- sort(c(cloglog(0.70), cloglog(0.80)))
+    rwe_t <- sort(c(cloglog(0.65), cloglog(0.75)))
+    var_rct <- (rct_t[2] - rct_t[1]) / (2 * 1.96)
+    var_rwe <- (rwe_t[2] - rwe_t[1]) / (2 * 1.96)
+    num / sqrt(var_rct^2 + var_rwe^2)
+  }
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement",
+    smd_scale = "loglog"
+  )
+
+  # regression check: without correctly reordering the transformed bounds,
+  # smd_agreement() would see lower > upper and error out, degrading this
+  # to "NA" via the tryCatch() path instead of a real SMD value
+  expect_false(stringr::str_detect(result[["_data"]][["smd_agreement"]], "^NA"))
+  expect_true(stringr::str_detect(
+    result[["_data"]][["smd_agreement"]],
+    sprintf("\\(%s\\)", format(expected_smd, digits = 2, nsmall = 2))
+  ))
+})
+
 test_that("agreement_metrics validates smd_scale", {
   x <- tibble::tribble(
     ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
@@ -497,4 +535,8 @@ test_that("agreement_metrics footnote text reflects the selected smd_scale", {
   expect_true(stringr::str_detect(footnote_for("log"), "based on log-transformed estimates"))
   expect_true(stringr::str_detect(footnote_for("identity"), "based on estimates' original scale"))
   expect_true(stringr::str_detect(footnote_for("logit"), "based on logit-transformed estimates"))
+  expect_true(stringr::str_detect(
+    footnote_for("loglog"),
+    "based on log-log-transformed survival probabilities"
+  ))
 })
