@@ -13,7 +13,8 @@ agreement_metrics(
   metrics = c("significance_agreement", "estimate_agreement", "smd_agreement"),
   show_aggregate = FALSE,
   show_aggregate_total = TRUE,
-  smd_scale = c("log", "identity", "logit", "loglog")
+  smd_scale = c("log", "identity", "logit", "cloglog"),
+  digits = 2
 )
 }
 \arguments{
@@ -37,7 +38,8 @@ If the value is one of "HR (95\% CI)", "OR (95\% CI)", or "RR (95\% CI)", the ta
 includes a matching abbreviation definition (e.g. "HR = Hazard ratio"); any other value is
 used as-is for the header without adding an abbreviation definition to the footnote.}
 
-\item{smd_threshold}{Numeric. Threshold for SMD agreement. Default: 1.96 (alpha=0.05)}
+\item{smd_threshold}{Numeric. Threshold for SMD agreement; a single positive number.
+Default: 1.96 (alpha=0.05)}
 
 \item{metrics}{Character vector. Which agreement metrics to compute and display.
 Must be a subset of "significance_agreement", "estimate_agreement", "smd_agreement".
@@ -59,20 +61,30 @@ returned gt object as \code{show_aggregate_total}, so it can be accessed program
 
 \item{smd_scale}{Character. Which transform to apply to the RCT/RWE estimates and
 confidence limits before computing the SMD. One of "log" (default), "identity",
-"logit", or "loglog". "log" is appropriate for ratio-scale measures (HR, OR, RR, IRR),
+"logit", or "cloglog". "log" is appropriate for ratio-scale measures (HR, OR, RR, IRR),
 since their confidence intervals are constructed via the delta method on the log
 scale. "identity" skips the transform, for measures already on an additive/difference
 scale (e.g. risk differences). "logit" is for proportions bounded on [0, 1].
-"loglog" is the complementary log-log transform, \code{log(-log(p))}, and is the correct
+"cloglog" is the complementary log-log transform, \code{log(-log(p))}, and is the correct
 scale for comparing survival probabilities (e.g. Kaplan-Meier estimates such as those
 from \code{\link[=km_pooling]{km_pooling()}}) — it matches the "log-log" confidence interval method used by
 \code{survival::survfit()} (\code{conf.type = "log-log"}). Each option expects inputs in a
-particular domain (log: > 0; logit and loglog: strictly between 0 and 1; identity:
+particular domain (log: > 0; logit and cloglog: strictly between 0 and 1; identity:
 any real number); values outside that domain will silently produce an "NA" SMD
-agreement result for that row rather than raising an error. "loglog" is a decreasing
+agreement result for that row rather than raising an error. "cloglog" is a decreasing
 function of its input, so the lower/upper confidence limits are automatically
 reordered after transforming to preserve the lower-less-than-upper invariant required
 internally. See Details for a related limitation that \code{smd_scale} does not address.}
+
+\item{digits}{Whole number or NULL. If not NULL, all RCT and RWE point estimates and
+confidence limits are rounded to this many decimal places \emph{before} any agreement
+metric (significance, estimate, SMD) is computed, so that, for example, a RWE estimate
+of 0.799 and an RCT confidence limit of 0.80 lead to an estimate agreement when \code{digits = 2}.
+The estimates and limits are displayed with this many decimals (the SMD is always shown
+with 2). Estimates must be positive and each interval must satisfy
+\verb{lower <= estimate <= upper}, checked after rounding. Missing values are allowed and
+give an "NA" agreement result for the affected metric. A pre-existing \code{smd_value} column in \code{x}
+is not recomputed or rounded. Default: 2. Set to NULL to disable rounding.}
 }
 \value{
 A gt table object with formatted agreement metrics

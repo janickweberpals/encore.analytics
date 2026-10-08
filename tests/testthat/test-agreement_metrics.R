@@ -471,7 +471,7 @@ test_that("agreement_metrics smd_scale = 'logit' applies the logit transform", {
   ))
 })
 
-test_that("agreement_metrics smd_scale = 'loglog' applies the complementary log-log transform for survival probabilities", {
+test_that("agreement_metrics smd_scale = 'cloglog' applies the complementary log-log transform for survival probabilities", {
   # survival-probability-like data: RCT/RWE estimate within (lower, upper),
   # all values strictly between 0 and 1
   x <- tibble::tribble(
@@ -496,7 +496,7 @@ test_that("agreement_metrics smd_scale = 'loglog' applies the complementary log-
     x,
     analysis_col = "Analysis",
     metrics = "smd_agreement",
-    smd_scale = "loglog"
+    smd_scale = "cloglog"
   )
 
   # regression check: without correctly reordering the transformed bounds,
@@ -536,7 +536,160 @@ test_that("agreement_metrics footnote text reflects the selected smd_scale", {
   expect_true(stringr::str_detect(footnote_for("identity"), "based on estimates' original scale"))
   expect_true(stringr::str_detect(footnote_for("logit"), "based on logit-transformed estimates"))
   expect_true(stringr::str_detect(
-    footnote_for("loglog"),
-    "based on log-log-transformed survival probabilities"
+    footnote_for("cloglog"),
+    "based on complementary log-log-transformed survival probabilities"
   ))
+})
+
+test_that("agreement_metrics rounds estimates and CIs to <digits> before computing agreement", {
+  # RWE estimate 0.799 lies just outside the RCT CI [0.80, 0.90] unless rounded;
+  # RCT lower limit 1.004 is "significant" unless rounded to 1.00
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Estimate", 0.85, 0.80, 0.90, 0.799, 0.70, 0.90,
+    "Significance", 1.10, 1.004, 1.20, 1.00, 0.90, 1.10
+  )
+
+  # explicit digits = 2 and the default (2) both round
+  for (res in list(
+    agreement_metrics(x, analysis_col = "Analysis", digits = 2),
+    agreement_metrics(x, analysis_col = "Analysis")
+  )) {
+    expect_equal(res[["_data"]][["estimate_agreement"]][1], "Yes")
+    expect_equal(res[["_data"]][["significance_agreement"]][2], "Yes")
+  }
+
+  # no rounding: the borderline cases disagree
+  res_raw <- agreement_metrics(x, analysis_col = "Analysis", digits = NULL)
+  expect_equal(res_raw[["_data"]][["estimate_agreement"]][1], "No")
+  expect_equal(res_raw[["_data"]][["significance_agreement"]][2], "No")
+
+  # SMD is computed on the rounded values too
+  x_smd <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.8004, 0.7004, 0.9004, 0.8, 0.7, 0.9
+  )
+  smd_rounded <- agreement_metrics(x_smd, analysis_col = "Analysis", digits = 2)
+  expect_true(stringr::str_detect(smd_rounded[["_data"]][["smd_agreement"]], "Yes \\(0\\.00\\)"))
+
+  # invalid digits
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", digits = -1), "digits")
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", digits = "2"), "digits")
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", digits = c(1, 2)), "digits")
+})
+
+test_that("agreement_metrics displays estimates and limits with <digits> decimals", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.8123, 0.7123, 0.9123, 0.8, 0.7, 0.9
+  )
+
+  res3 <- agreement_metrics(x, analysis_col = "Analysis", digits = 3)
+  expect_equal(as.character(res3[["_data"]][["RCT"]]), "0.812 (0.712 - 0.912)")
+  expect_equal(as.character(res3[["_data"]][["RWE"]]), "0.800 (0.700 - 0.900)")
+
+  res0 <- suppressWarnings(agreement_metrics(x, analysis_col = "Analysis", digits = 0))
+  expect_equal(as.character(res0[["_data"]][["RCT"]]), "1 (1 - 1)")
+
+  # no rounding falls back to 2 displayed decimals
+  res_null <- agreement_metrics(x, analysis_col = "Analysis", digits = NULL)
+  expect_equal(as.character(res_null[["_data"]][["RCT"]]), "0.81 (0.71 - 0.91)")
+
+  # one tiny value must not change the decimals shown for other rows
+  x2 <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "a", 0.8, 0.7, 0.9, 0.8, 0.7, 0.9,
+    "b", 0.8, 0.7, 0.9, 0.8, 0.7, 0.9
+  )
+  x2$rwe_lower[2] <- 0.0012
+  res_rows <- agreement_metrics(x2, analysis_col = "Analysis", digits = NULL)
+  expect_equal(as.character(res_rows[["_data"]][["RWE"]][1]), "0.80 (0.70 - 0.90)")
+  expect_equal(as.character(res_rows[["_data"]][["RWE"]][2]), "0.80 (0.00 - 0.90)")
+
+  # documentation example: a RWE estimate of 0.799 and an RCT limit of 0.80
+  # agree once rounded, and are displayed consistently with that decision
+  x3 <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Doc example", 0.85, 0.80, 0.90, 0.799, 0.70, 0.90
+  )
+  res_doc <- agreement_metrics(x3, analysis_col = "Analysis", digits = 2)
+  expect_equal(res_doc[["_data"]][["estimate_agreement"]], "Yes")
+  expect_equal(as.character(res_doc[["_data"]][["RWE"]]), "0.80 (0.70 - 0.90)")
+
+  res_doc_raw <- agreement_metrics(x3, analysis_col = "Analysis", digits = NULL)
+  expect_equal(res_doc_raw[["_data"]][["estimate_agreement"]], "No")
+})
+
+test_that("agreement_metrics checks positivity after rounding", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Tiny", 0.004, 0.001, 0.009, 0.8, 0.7, 0.9
+  )
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", digits = 2),
+    "RCT estimates must be positive.*after rounding"
+  )
+  # without rounding the estimate is valid
+  expect_no_error(agreement_metrics(x, analysis_col = "Analysis", digits = NULL))
+})
+
+test_that("agreement_metrics requires a data.frame with numeric estimate columns", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+  x$rct_lower <- as.character(x$rct_lower)
+  expect_error(agreement_metrics(x, analysis_col = "Analysis"), "must be numeric")
+  expect_error(agreement_metrics("not a df", analysis_col = "Analysis"), "not a data.frame")
+})
+
+test_that("agreement_metrics handles missing values without an obscure error", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Complete", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "Missing RWE estimate", 0.80, 0.70, 0.90, NA, 0.70, 0.90,
+    "Missing RCT limit", 0.80, NA, 0.90, 0.80, 0.70, 0.90
+  )
+
+  result <- suppressWarnings(agreement_metrics(x, analysis_col = "Analysis"))
+  expect_equal(result[["_data"]][["estimate_agreement"]], c("Yes", "NA", "NA"))
+  expect_equal(result[["_data"]][["significance_agreement"]], c("Yes", "Yes", "NA"))
+
+  # "NA" cells are excluded from the pooled denominator and the table renders
+  expect_no_error(gt::as_raw_html(
+    suppressWarnings(agreement_metrics(x, analysis_col = "Analysis", show_aggregate = TRUE))
+  ))
+  expect_equal(result$show_aggregate_total, "100% (4/4)")
+})
+
+test_that("agreement_metrics rejects malformed confidence intervals", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "ok", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "bad RWE", 0.80, 0.70, 0.90, 0.80, 0.90, 0.70
+  )
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis"),
+    "RWE estimate must lie within its confidence limits.*row\\(s\\): 2"
+  )
+
+  x2 <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "estimate outside", 0.95, 0.70, 0.90, 0.80, 0.70, 0.90
+  )
+  expect_error(
+    agreement_metrics(x2, analysis_col = "Analysis"),
+    "RCT estimate must lie within its confidence limits"
+  )
+})
+
+test_that("agreement_metrics validates smd_threshold and whole-number digits", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", smd_threshold = -1), "smd_threshold")
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", smd_threshold = "a"), "smd_threshold")
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", smd_threshold = c(1, 2)), "smd_threshold")
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", digits = 1.5), "digits")
 })
