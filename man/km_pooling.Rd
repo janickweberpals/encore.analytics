@@ -12,7 +12,8 @@ km_pooling(
 )
 }
 \arguments{
-\item{x}{imputed and matched (mimids) or weighted (wimids) object}
+\item{x}{imputed and matched (mimids) or weighted (wimids) object, imputed (mids) object
+or list of data frames (e.g., output of \code{\link{raking_weights}}), see details}
 
 \item{surv_formula}{specification of survival model formula to be fitted}
 
@@ -59,10 +60,26 @@ and outputs corresponding Kaplan-Meier curve across imputed and
 matched/weighted datasets
 }
 \details{
-The function requires an object of class mimids or wimids (\code{x}), which is the output
-of a workflow that requires imputing multiple (m) datasets using mice or amelia
-and matching or weighting each imputed dataset via the MatchThem package
-(see examples).
+The function accepts (\code{x}):
+\itemize{
+\item an object of class mimids or wimids, which is the output of a workflow that requires
+imputing multiple (m) datasets using mice or amelia and matching or weighting each
+imputed dataset via the MatchThem package (see examples). Matched/weighted
+observations only are used.
+\item an object of class mids (e.g., from \code{\link[mice]{mice}}), in which case an
+unweighted Kaplan-Meier estimate is computed in each imputed dataset.
+\item a list of data frames (e.g., the output of \code{\link{raking_weights}}), analogous to the
+input of \code{\link{cox_pooling}}. Weights and cluster membership are picked up by column name:
+if the data frames contain a \code{weights} column, it is used as case weights with robust
+variance estimates. If they additionally contain a \code{subclass} column (matching), it is used
+as cluster variable. Otherwise, an unweighted Kaplan-Meier estimate is computed. These columns
+need to be present in all or none of the data frames.
+}
+
+\strong{Note for lists of data frames}: each data frame needs to already contain only the
+observations to be analyzed. When building the list from a mimids or wimids object, use
+\code{MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)}; otherwise unmatched
+patients or those with zero weight are included in the Kaplan-Meier fit.
 
 The function fits the pre-specified survfit model (\code{surv_formula}, \code{\link[survival]{survfit}} package)
 to compute survival probabilities at each individual time point according to the Kaplan-Meier method.
@@ -180,6 +197,20 @@ More references:
  # KM curve
  km_out$km_plot
 
+ # unweighted Kaplan-Meier curve directly from the imputed (mids) object
+ km_out_mids <- km_pooling(
+   x = mids,
+   surv_formula = km_fit
+   )
+
+ # alternatively, a list of (e.g., weighted) data frames can be passed:
+ # here, the completed, weighted datasets of the wimids object
+ datasets <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+ km_out_list <- km_pooling(
+   x = datasets,
+   surv_formula = km_fit
+   )
+
  # pass additional arguments to the underlying survfit2() call:
  # pass a column-based NSE argument (e.g. id = patientid) through `...`;
  # patientid is resolved as a column of each imputed/weighted dataset.
@@ -195,5 +226,5 @@ More references:
 
 }
 \seealso{
-\code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}
+\code{\link{cox_pooling}} \code{\link{raking_weights}} \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}
 }

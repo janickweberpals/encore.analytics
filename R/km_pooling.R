@@ -6,10 +6,24 @@
 #' matched/weighted datasets
 #'
 #' @details
-#' The function requires an object of class mimids or wimids (\code{x}), which is the output
-#' of a workflow that requires imputing multiple (m) datasets using mice or amelia
-#' and matching or weighting each imputed dataset via the MatchThem package
-#' (see examples).
+#' The function accepts (\code{x}):
+#' - an object of class mimids or wimids, which is the output of a workflow that requires
+#'   imputing multiple (m) datasets using mice or amelia and matching or weighting each
+#'   imputed dataset via the MatchThem package (see examples). Matched/weighted
+#'   observations only are used.
+#' - an object of class mids (e.g., from \code{\link[mice]{mice}}), in which case an
+#'   unweighted Kaplan-Meier estimate is computed in each imputed dataset.
+#' - a list of data frames (e.g., the output of \code{\link{raking_weights}}), analogous to the
+#'   input of \code{\link{cox_pooling}}. Weights and cluster membership are picked up by column name:
+#'   if the data frames contain a \code{weights} column, it is used as case weights with robust
+#'   variance estimates. If they additionally contain a \code{subclass} column (matching), it is used
+#'   as cluster variable. Otherwise, an unweighted Kaplan-Meier estimate is computed. These columns
+#'   need to be present in all or none of the data frames.
+#'
+#' \strong{Note for lists of data frames}: each data frame needs to already contain only the
+#' observations to be analyzed. When building the list from a mimids or wimids object, use
+#' \code{MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)}; otherwise unmatched
+#' patients or those with zero weight are included in the Kaplan-Meier fit.
 #'
 #' The function fits the pre-specified survfit model (\code{surv_formula}, \code{\link[survival]{survfit}} package)
 #' to compute survival probabilities at each individual time point according to the Kaplan-Meier method.
@@ -79,9 +93,10 @@
 #' -  https://bmcmedresmethodol.biomedcentral.com/articles/10.1186/s12874-015-0048-4
 #'
 #' @seealso
-#' \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}
+#' \code{\link{cox_pooling}} \code{\link{raking_weights}} \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}
 #'
-#' @param x imputed and matched (mimids) or weighted (wimids) object
+#' @param x imputed and matched (mimids) or weighted (wimids) object, imputed (mids) object
+#' or list of data frames (e.g., output of \code{\link{raking_weights}}), see details
 #' @param surv_formula specification of survival model formula to be fitted
 #' @param times numeric vector of follow-up time points at which survival probabilities are to be estimated (propagated to \code{\link[ggsurvfit]{tidy_survfit}}).
 #' If NULL (default), survival probabilities are estimated and pooled across all observed event times.
@@ -161,6 +176,20 @@
 #'  # KM curve
 #'  km_out$km_plot
 #'
+#'  # unweighted Kaplan-Meier curve directly from the imputed (mids) object
+#'  km_out_mids <- km_pooling(
+#'    x = mids,
+#'    surv_formula = km_fit
+#'    )
+#'
+#'  # alternatively, a list of (e.g., weighted) data frames can be passed:
+#'  # here, the completed, weighted datasets of the wimids object
+#'  datasets <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+#'  km_out_list <- km_pooling(
+#'    x = datasets,
+#'    surv_formula = km_fit
+#'    )
+#'
 #'  # pass additional arguments to the underlying survfit2() call:
 #'  # pass a column-based NSE argument (e.g. id = patientid) through `...`;
 #'  # patientid is resolved as a column of each imputed/weighted dataset.
@@ -184,26 +213,74 @@ km_pooling <- function(
 ) {
   # input checks ------------------------------------------------------------
 
-  # check if x is a mimids or wimids object
+  # determine the type of input. mimids and wimids inherit from mids, so they
+  # need to be identified first
+  x_type <- if (inherits(x, "mimids")) {
+    "mimids"
+  } else if (inherits(x, "wimids")) {
+    "wimids"
+  } else if (inherits(x, "mids")) {
+    "mids"
+  } else if (is.list(x) && !is.data.frame(x)) {
+    "list"
+  } else {
+    NA_character_
+  }
+
   assertthat::assert_that(
-    inherits(x, c("mimids", "wimids")),
-    msg = "<x> needs to be a mimids or wimids object"
+    !is.na(x_type),
+    msg = "<x> needs to be a mimids, wimids or mids object or a list of data frames"
   )
   # check if surv_formula is a formula
   assertthat::assert_that(
     inherits(surv_formula, "formula"),
     msg = "<surv_formula> needs to be a formula"
   )
+
+  if (x_type == "list") {
+    assertthat::assert_that(
+      length(x) > 0 && all(vapply(x, is.data.frame, logical(1))),
+      msg = "<x> needs to be a non-empty list of data frames"
+    )
+    # all variables of the survival model need to be in each dataset
+    missing_vars <- unique(unlist(lapply(
+      x,
+      function(d) setdiff(all.vars(surv_formula), names(d))
+    )))
+    assertthat::assert_that(
+      length(missing_vars) == 0,
+      msg = paste0(
+        "variables in <surv_formula> not found in all datasets of <x>: ",
+        paste(missing_vars, collapse = ", ")
+      )
+    )
+    # weights and subclass are either in all or none of the datasets
+    for (col in c("weights", "subclass")) {
+      has_col <- vapply(x, function(d) col %in% names(d), logical(1))
+      assertthat::assert_that(
+        all(has_col) || !any(has_col),
+        msg = paste0("column <", col, "> needs to be present in all or none of the datasets in <x>")
+      )
+    }
+    if (length(x) == 1) {
+      warning(
+        "<x> contains only one dataset; Rubin's rule requires at least two datasets to estimate the total variance",
+        call. = FALSE
+      )
+    }
+  }
+
   # check weights and subclass
-  assertthat::assert_that(
-    "weights" %in% names(MatchThem::complete(x)),
-    msg = "<x> needs to contain a weights column"
-  )
-  # check if weights and subclass are in the data
-  if (inherits(x, "mimids")) {
+  if (x_type %in% c("mimids", "wimids")) {
+    assertthat::assert_that(
+      "weights" %in% names(MatchThem::complete(x)),
+      msg = "<x> needs to contain a weights column"
+    )
+  }
+  if (x_type == "mimids") {
     assertthat::assert_that(
       "subclass" %in% names(MatchThem::complete(x)),
-      msg = "<x> needs to contain a weights column"
+      msg = "<x> needs to contain a subclass column"
     )
   }
   if (!is.null(times)) {
@@ -250,28 +327,38 @@ km_pooling <- function(
   # `formula`/`data`/`weights`/`cluster` kept as plain symbols (resolved by
   # survfit() against `data = i`, exactly like a literal call would) and
   # `extra_args` spliced in by value avoids that.
+  #
+  # weights and cluster membership are used if present: always for
+  # mimids/wimids (enforced above), unweighted for mids, and data-driven
+  # for lists of data frames (e.g., the output of raking_weights())
+  first_data <- if (x_type == "list") x[[1]] else NULL
+  use_weights <- switch(
+    x_type,
+    mimids = TRUE,
+    wimids = TRUE,
+    mids = FALSE,
+    list = "weights" %in% names(first_data)
+  )
+  use_cluster <- switch(
+    x_type,
+    mimids = TRUE,
+    wimids = FALSE,
+    mids = FALSE,
+    list = "subclass" %in% names(first_data)
+  )
+
   compute_km <- function(i) {
     # compute the survival function for dataset i
 
-    ## for weighting
-    if (inherits(x, "wimids")) {
-      base_args <- list(
-        formula = quote(surv_formula),
-        weights = quote(weights),
-        robust = TRUE,
-        data = quote(i)
-      )
+    base_args <- list(formula = quote(surv_formula), data = quote(i))
+    if (use_weights) {
+      base_args$weights <- quote(weights)
     }
-
-    ## for matching
-    if (inherits(x, "mimids")) {
-      base_args <- list(
-        formula = quote(surv_formula),
-        weights = quote(weights),
-        cluster = quote(subclass),
-        robust = TRUE,
-        data = quote(i)
-      )
+    if (use_cluster) {
+      base_args$cluster <- quote(subclass)
+    }
+    if (use_weights || use_cluster) {
+      base_args$robust <- TRUE
     }
 
     call_expr <- as.call(c(quote(ggsurvfit::survfit2), base_args, extra_args))
@@ -290,11 +377,17 @@ km_pooling <- function(
   # Important: the all = parameter needs to be set to FALSE
   # since otherwise unmatched patients or those with zero weight
   # will be included, too!
-  object_list <- MatchThem::complete(
-    x,
-    action = "all",
-    all = FALSE,
-    include = FALSE
+  object_list <- switch(
+    x_type,
+    mimids = ,
+    wimids = MatchThem::complete(
+      x,
+      action = "all",
+      all = FALSE,
+      include = FALSE
+    ),
+    mids = mice::complete(x, action = "all", include = FALSE),
+    list = x
   )
 
   # now apply the compute_km function across all imputed and matched/weighted datasets

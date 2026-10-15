@@ -1,6 +1,6 @@
 test_that("km_pooling throws error on incorrect object type", {
   dummy_data <- data.frame(x = 1:10, y = 1:10)
-  expect_error(km_pooling(x = dummy_data), "<x> needs to be a mimids or wimids object")
+  expect_error(km_pooling(x = dummy_data), "<x> needs to be a mimids, wimids or mids object or a list of data frames")
 })
 
 test_that("km_pooling throws error on incorrect surv_formula", {
@@ -129,4 +129,84 @@ test_that("km_pooling rejects arguments it sets internally via ...", {
       "set internally by km_pooling"
     )
   }
+})
+
+test_that("km_pooling on a list of completed datasets equals the wimids result", {
+
+  datasets <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+
+  expect_equal(
+    km_pooling(x = datasets, surv_formula = km_fit)$km_survival_table,
+    km_pooling(x = wimids, surv_formula = km_fit)$km_survival_table
+  )
+})
+
+test_that("km_pooling on a list of completed datasets equals the mimids result", {
+
+  # subclass is picked up as cluster variable
+  datasets <- MatchThem::complete(mimids, action = "all", all = FALSE, include = FALSE)
+
+  expect_equal(
+    km_pooling(x = datasets, surv_formula = km_fit)$km_survival_table,
+    km_pooling(x = mimids, surv_formula = km_fit)$km_survival_table
+  )
+})
+
+test_that("km_pooling works with a mids object and equals the list of completed datasets", {
+
+  mids_obj <- mids
+
+  result <- km_pooling(x = mids_obj, surv_formula = km_fit)
+
+  expect_named(result, c("km_median_survival", "km_plot", "km_survival_table"))
+  expect_equal(unique(result$km_survival_table$m), mids_obj$m)
+  expect_equal(
+    result$km_survival_table,
+    km_pooling(
+      x = mice::complete(mids_obj, action = "all", include = FALSE),
+      surv_formula = km_fit
+    )$km_survival_table
+  )
+})
+
+test_that("km_pooling uses weights of a list only if present", {
+
+  datasets <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+  unweighted <- lapply(datasets, function(d) d[, setdiff(names(d), "weights")])
+
+  expect_false(isTRUE(all.equal(
+    km_pooling(x = datasets, surv_formula = km_fit)$km_survival_table$surv,
+    km_pooling(x = unweighted, surv_formula = km_fit)$km_survival_table$surv
+  )))
+})
+
+test_that("km_pooling validates lists of data frames", {
+
+  datasets <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+
+  expect_error(km_pooling(x = list(), surv_formula = km_fit), "non-empty list of data frames")
+  expect_error(km_pooling(x = list(1, 2), surv_formula = km_fit), "non-empty list of data frames")
+  expect_error(
+    km_pooling(x = lapply(datasets, function(d) d[, setdiff(names(d), "treat")]), surv_formula = km_fit),
+    "not found in all datasets"
+  )
+  mixed <- datasets
+  mixed[[1]]$weights <- NULL
+  expect_error(km_pooling(x = mixed, surv_formula = km_fit), "all or none")
+  expect_warning(km_pooling(x = datasets[1], surv_formula = km_fit), "only one dataset")
+})
+
+test_that("km_pooling accepts the output of raking_weights() and uses the raking weights", {
+
+  utils::capture.output(raked <- raking_weights(x = mimids, targets = targets_list))
+
+  result <- km_pooling(x = raked, surv_formula = km_fit)
+  expect_named(result, c("km_median_survival", "km_plot", "km_survival_table"))
+  expect_equal(max(result$km_survival_table$m), length(raked))
+
+  # raking weights change the estimate relative to the matched-only result
+  expect_false(isTRUE(all.equal(
+    result$km_survival_table$surv,
+    km_pooling(x = mimids, surv_formula = km_fit)$km_survival_table$surv
+  )))
 })
