@@ -50,7 +50,7 @@ list with pooled median survival estimate and pooled Kaplan-Meier curve
 \item strata = stratum
 \item time = observed time point
 \item m = number of imputed datasets
-\item qbar = pooled univariate estimate of the complementary log-log transformed survival probabilities, see formula (3.1.2) Rubin (1987)
+\item qbar = pooled univariate estimate of the complementary log-log transformed survival probabilities \eqn{\log(-\log(1 - S))}, see formula (3.1.2) Rubin (1987)
 \item t = total variance of the pooled univariate estimate of the complementary log-log transformed survival probabilities, formula (3.1.5) Rubin (1987)
 \item se = total standard error of the pooled estimate (derived as sqrt(t))
 \item surv = back-transformed pooled survival probability
@@ -86,14 +86,30 @@ computation are unaffected.
 
 Since survival probabilities typically don't follow normal distributions,
 these need to be transformed to approximate normality first before pooling
-across imputed datasets and time points. To that end, survival probabilities are first
-transformed using a complementary log-log transformation (\code{log(-log(1-pr(surv)))})
-as recommended by multiple sources (Marshall, Billingham, and Bryan (2009)).
+across imputed datasets and time points. To that end, the method of Morisot et al. (2015) is
+implemented, who applied Rubin's rules after a complementary log-log transformation of the
+survival probabilities, following the recommendation of Marshall et al. (2009) to combine
+predicted survival probabilities after this transformation. In each imputed dataset
+\emph{i} and at each time point \emph{t}, the survival probability \eqn{S_i(t)} is transformed to
+\deqn{Q_i(t) = \log(-\log(1 - S_i(t)))}
+and the corresponding within-dataset variance is derived from the variance of the survival
+probability (the squared standard error reported by \code{\link[survival]{survfit}}) with the delta method:
+\deqn{U_i(t) = \frac{Var[S_i(t)]}{\left[(1 - S_i(t)) \log(1 - S_i(t))\right]^2}}
+
+Note that the complementary log-log transformation is applied to the survival probability
+\eqn{S} itself, as in Morisot et al. (2015). This is not the same transformation as the
+\eqn{\log(-\log(S))} used for the confidence intervals of \code{\link[survival]{survfit}}
+with \code{conf.type = "log-log"}. For a single dataset, the point estimates and standard errors
+therefore agree with \code{\link[survival]{survfit}}, but the confidence intervals differ slightly.
 
 To pool the transformed estimates across imputed datasets and time points, the \code{\link[mice]{pool.scalar}}
 function is used to apply Rubin's rule to combine pooled estimates (qbar) according to
 formula (3.1.2) Rubin (1987) and to compute the corresponding total variance (t) of the pooled
-estimate according to formula (3.1.5) Rubin (1987). When \code{times = NULL}, the pooling is performed
+estimate according to formula (3.1.5) Rubin (1987), i.e.,
+\eqn{T = \bar{U} + (1 + 1/m) B} with the average within-dataset variance \eqn{\bar{U}} and
+the between-dataset variance \eqn{B} (as in Morisot et al. (2015)). If only a single dataset is supplied (m = 1, e.g., complete
+data without imputation), the between-imputation variance is 0 by definition, the total variance equals the
+within-dataset variance and a warning is raised. When \code{times = NULL}, the pooling is performed
 at each unique combination of event times across all imputed datasets. When specific time points are provided
 via the \code{times} argument, pooling occurs only at those pre-specified time points, ensuring consistency
 across datasets and facilitating comparison at clinically relevant follow-up intervals.
@@ -109,7 +125,7 @@ Special scenarios during the transformation, pooling and backtransformation are
 considered. By convention, Kaplan-Meier survival curves start at time = 0 with survival probability = 1
 unless a delayed entry survival model is fitted (not supported yet). In the case that there is no
 observation in the data at at time = 0 with survival probability = 1, the \code{\link[ggsurvfit]{tidy_survfit}}
-extrapolates this across strata. For the complimentary log-log transformation this means, that survival probabilities = 1
+extrapolates this across strata. For the complementary log-log transformation this means, that survival probabilities = 1
 at time = 0 and corresponding confidence intervals are extrapolated to 1. If the survival proability reaches exactly 0,
 the survival probability and corresponding confidence intervals are set to 0 as well.
 
@@ -146,8 +162,6 @@ The function follows the following logic:
 More references:
 \itemize{
 \item https://stefvanbuuren.name/fimd/sec-pooling.html
-\item https://link.springer.com/article/10.1007/s10198-008-0129-y
-\item https://bmcmedresmethodol.biomedcentral.com/articles/10.1186/s12874-015-0048-4
 }
 }
 \section{Input types and default model arguments}{
@@ -287,6 +301,17 @@ input type, derived, or specified by you). Use \code{suppressMessages()} to sile
    id = patientid
    )
 
+}
+\references{
+Morisot A, Bessaoud F, Landais P, et al. Prostate cancer: net survival and cause-specific survival
+rates after multiple imputation. \emph{BMC Med Res Methodol}. 2015;15:54.
+\doi{10.1186/s12874-015-0048-4}
+
+Marshall A, Altman DG, Holder RL, Royston P. Combining estimates of interest in prognostic
+modelling studies after multiple imputation: current practice and guidelines.
+\emph{BMC Med Res Methodol}. 2009;9:57. \doi{10.1186/1471-2288-9-57}
+
+Rubin DB. \emph{Multiple Imputation for Nonresponse in Surveys}. Wiley; 1987.
 }
 \seealso{
 \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}

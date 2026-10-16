@@ -65,10 +65,11 @@ confidence limits before computing the SMD. One of "log" (default), "identity",
 since their confidence intervals are constructed via the delta method on the log
 scale. "identity" skips the transform, for measures already on an additive/difference
 scale (e.g. risk differences). "logit" is for proportions bounded on [0, 1].
-"cloglog" is the complementary log-log transform, \code{log(-log(p))}, and is the correct
-scale for comparing survival probabilities (e.g. Kaplan-Meier estimates such as those
-from \code{\link[=km_pooling]{km_pooling()}}) — it matches the "log-log" confidence interval method used by
-\code{survival::survfit()} (\code{conf.type = "log-log"}). Each option expects inputs in a
+"cloglog" is the log-log transform of a survival probability, \code{log(-log(p))}, which
+is the scale of the "log-log" confidence interval method used by \code{survival::survfit()}
+(\code{conf.type = "log-log"}). Note that \code{\link[=km_pooling]{km_pooling()}} pools survival probabilities on a
+different scale, \code{log(-log(1 - p))} (Morisot et al. 2015), see its documentation.
+Each option expects inputs in a
 particular domain (log: > 0; logit and cloglog: strictly between 0 and 1; identity:
 any real number); values outside that domain will silently produce an "NA" SMD
 agreement result for that row rather than raising an error. "cloglog" is a decreasing
