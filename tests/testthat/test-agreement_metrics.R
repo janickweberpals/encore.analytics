@@ -102,10 +102,594 @@ test_that("agreement_metrics preserves row order", {
     "Analysis 1", 0.50, 0.40, 0.60, 0.55, 0.45, 0.65,
     "Analysis 2", 0.70, 0.60, 0.80, 0.75, 0.65, 0.85
   )
-  
+
   result <- agreement_metrics(x, analysis_col = "Analysis")
   expect_equal(
-    result[["_data"]][["Analysis"]], 
+    result[["_data"]][["Analysis"]],
     c("Analysis 3", "Analysis 1", "Analysis 2")
   )
+})
+
+test_that("agreement_metrics does not error for unrecognized estimate_label and omits its abbreviation", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  # a label that is not one of "HR/OR/RR (95% CI)" must not raise an error
+  result <- agreement_metrics(x, analysis_col = "Analysis", estimate_label = "aHR (95% CI)")
+
+  footnote <- result[["_footnotes"]][["footnotes"]][[1]]
+  expect_true(stringr::str_detect(footnote, "Abbreviations: CI = Confidence interval, RCT"))
+  expect_false(stringr::str_detect(footnote, "aHR ="))
+})
+
+test_that("agreement_metrics adds the matching abbreviation for recognized estimate_label values", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  result_hr <- agreement_metrics(x, analysis_col = "Analysis", estimate_label = "HR (95% CI)")
+  footnote_hr <- result_hr[["_footnotes"]][["footnotes"]][[1]]
+  expect_true(stringr::str_detect(footnote_hr, "HR = Hazard ratio"))
+
+  result_or <- agreement_metrics(x, analysis_col = "Analysis", estimate_label = "OR (95% CI)")
+  footnote_or <- result_or[["_footnotes"]][["footnotes"]][[1]]
+  expect_true(stringr::str_detect(footnote_or, "OR = Odds ratio"))
+
+  result_rr <- agreement_metrics(x, analysis_col = "Analysis", estimate_label = "RR (95% CI)")
+  footnote_rr <- result_rr[["_footnotes"]][["footnotes"]][[1]]
+  expect_true(stringr::str_detect(footnote_rr, "RR = Rate ratio"))
+})
+
+test_that("agreement_metrics significance_agreement requires both RCT and RWE to be statistically significant", {
+  # RCT is significantly harmful (lower bound > 1), but RWE's CI crosses the
+  # null value (not statistically significant) -- these must NOT agree, even
+  # though both point estimates are >= 1
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "RWE not significant", 1.5, 1.2, 1.8, 1.3, 0.7, 2.0
+  )
+
+  result <- agreement_metrics(x, analysis_col = "Analysis")
+  expect_equal(result[["_data"]][["significance_agreement"]], "No")
+})
+
+test_that("agreement_metrics significance_agreement is symmetric for non-significant results in either direction", {
+  # both non-significant with point estimates >= 1 (harmful direction) and
+  # both non-significant with point estimates < 1 (protective direction)
+  # must be classified as agreement ("Yes") consistently
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Both null, >= 1", 1.2, 0.9, 1.6, 1.3, 0.8, 1.9,
+    "Both null, < 1", 0.8, 0.6, 1.1, 0.75, 0.5, 1.2
+  )
+
+  result <- agreement_metrics(x, analysis_col = "Analysis")
+  expect_equal(result[["_data"]][["significance_agreement"]], c("Yes", "Yes"))
+})
+
+test_that("agreement_metrics significance_agreement agrees when both RCT and RWE are significantly harmful", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Both significantly harmful", 1.5, 1.2, 1.8, 1.4, 1.1, 1.7
+  )
+
+  result <- agreement_metrics(x, analysis_col = "Analysis")
+  expect_equal(result[["_data"]][["significance_agreement"]], "Yes")
+})
+
+test_that("agreement_metrics metrics argument selects which columns are computed and displayed", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = c("significance_agreement", "estimate_agreement")
+  )
+  expect_true(all(
+    c("significance_agreement", "estimate_agreement") %in%
+      colnames(result[["_data"]])
+  ))
+  expect_false("smd_agreement" %in% colnames(result[["_data"]]))
+
+  footnote <- result[["_footnotes"]][["footnotes"]][[1]]
+  expect_false(stringr::str_detect(footnote, "SMD ="))
+
+  result_smd_only <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement"
+  )
+  expect_false(any(
+    c("significance_agreement", "estimate_agreement") %in%
+      colnames(result_smd_only[["_data"]])
+  ))
+  expect_true("smd_agreement" %in% colnames(result_smd_only[["_data"]]))
+})
+
+test_that("agreement_metrics skips the SMD calculation entirely when smd_agreement is excluded", {
+  # degenerate RCT bounds (lower == upper) make the smd_agreement() helper
+  # stop(), which agreement_metrics() converts into a warning + NA smd_value
+  # only when smd_agreement is actually requested and thus computed
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Degenerate RCT bounds", 0.87, 0.87, 0.87, 0.82, 0.76, 0.87
+  )
+
+  expect_warning(
+    agreement_metrics(x, analysis_col = "Analysis"),
+    "SMD calculation failed"
+  )
+
+  expect_no_warning(
+    agreement_metrics(
+      x,
+      analysis_col = "Analysis",
+      metrics = c("significance_agreement", "estimate_agreement")
+    )
+  )
+})
+
+test_that("agreement_metrics validates the metrics argument", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", metrics = "bogus"),
+    "<metrics> must be a subset of"
+  )
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", metrics = character(0)),
+    "<metrics> must be a non-empty character vector"
+  )
+})
+
+test_that("agreement_metrics orders metric columns canonically regardless of metrics input order", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = c("estimate_agreement", "significance_agreement")
+  )
+  metric_cols <- intersect(
+    colnames(result[["_data"]]),
+    c("significance_agreement", "estimate_agreement", "smd_agreement")
+  )
+  expect_equal(metric_cols, c("significance_agreement", "estimate_agreement"))
+})
+
+test_that("agreement_metrics show_aggregate_total is on by default and shows the correct pooled percentage", {
+  # "Perfect" agrees on all metrics (Yes/Yes/Yes), "Disagree" agrees on none
+  # (No/No/No) -> pooled across all 3 metrics and 2 rows = 3 Yes / 6 total
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Perfect", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "Disagree", 0.5, 0.4, 0.6, 2.0, 1.8, 2.2
+  )
+
+  result <- agreement_metrics(x, analysis_col = "Analysis")
+  expect_length(result[["_source_notes"]], 1)
+  expect_true(stringr::str_detect(
+    result[["_source_notes"]][[1]],
+    "Overall agreement across all metrics: 50% \\(3/6\\)"
+  ))
+
+  result_off <- agreement_metrics(x, analysis_col = "Analysis", show_aggregate_total = FALSE)
+  expect_length(result_off[["_source_notes"]], 0)
+})
+
+test_that("agreement_metrics exposes the pooled total percentage directly on the returned object", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Perfect", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "Disagree", 0.5, 0.4, 0.6, 2.0, 1.8, 2.2
+  )
+
+  result <- agreement_metrics(x, analysis_col = "Analysis")
+  expect_equal(result$show_aggregate_total, "50% (3/6)")
+
+  result_off <- agreement_metrics(x, analysis_col = "Analysis", show_aggregate_total = FALSE)
+  expect_null(result_off$show_aggregate_total)
+})
+
+test_that("agreement_metrics show_aggregate adds a per-metric summary row and renders without error", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Perfect", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "Disagree", 0.5, 0.4, 0.6, 2.0, 1.8, 2.2
+  )
+
+  result_off <- agreement_metrics(x, analysis_col = "Analysis")
+  expect_length(result_off[["_summary"]], 0)
+
+  result <- agreement_metrics(x, analysis_col = "Analysis", show_aggregate = TRUE)
+  expect_length(result[["_summary"]], 1)
+
+  # gt::grand_summary_rows() evaluates its summary functions lazily at
+  # render time, so only rendering (not just inspecting `_summary`) can
+  # catch a summary function that fails to resolve at that point
+  html <- gt::as_raw_html(result)
+  expect_true(stringr::str_detect(html, "% Agreement"))
+  expect_true(stringr::str_detect(html, "50%"))
+})
+
+test_that("agreement_metrics show_aggregate and show_aggregate_total pool only the selected metrics subset", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Perfect", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "Disagree", 0.5, 0.4, 0.6, 2.0, 1.8, 2.2
+  )
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = c("significance_agreement", "estimate_agreement"),
+    show_aggregate = TRUE
+  )
+
+  summary_columns <- result[["_summary"]][[1]][["columns"]]
+  expect_equal(summary_columns, c("significance_agreement", "estimate_agreement"))
+
+  # pooled across the 2 selected metrics x 2 rows = 2 Yes / 4 total
+  expect_true(stringr::str_detect(
+    result[["_source_notes"]][[1]],
+    "Overall agreement across all metrics: 50% \\(2/4\\)"
+  ))
+
+  html <- gt::as_raw_html(result)
+  expect_true(stringr::str_detect(html, "50%"))
+})
+
+test_that("agreement_metrics aggregate helpers handle an all-NA metric without erroring", {
+  # degenerate RCT bounds (lower == upper) make every row's SMD calculation
+  # fail, leaving smd_agreement == "NA" for all rows -> zero-row denominator
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Degenerate 1", 0.87, 0.87, 0.87, 0.82, 0.76, 0.87,
+    "Degenerate 2", 0.80, 0.80, 0.80, 0.75, 0.65, 0.85
+  )
+
+  result <- suppressWarnings(agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement",
+    show_aggregate = TRUE
+  ))
+
+  expect_true(stringr::str_detect(result[["_source_notes"]][[1]], "NA"))
+  # gt::grand_summary_rows() evaluates its summary functions lazily at
+  # render time, so rendering (not just inspecting `_summary`) is required
+  # to confirm a zero-denominator metric doesn't error when the table is built
+  expect_no_error(gt::as_raw_html(result))
+})
+
+test_that("agreement_metrics validates show_aggregate and show_aggregate_total", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", show_aggregate = "yes"),
+    "<show_aggregate> must be a single logical value"
+  )
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", show_aggregate_total = c(TRUE, FALSE)),
+    "<show_aggregate_total> must be a single logical value"
+  )
+})
+
+test_that("agreement_metrics smd_scale defaults to log and reproduces existing SMD values", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.3, 0.2, 0.4, 0.5, 0.4, 0.6
+  )
+
+  expected_smd <- {
+    num <- log(0.3) - log(0.5)
+    var_rct <- (log(0.4) - log(0.2)) / (2 * 1.96)
+    var_rwe <- (log(0.6) - log(0.4)) / (2 * 1.96)
+    num / sqrt(var_rct^2 + var_rwe^2)
+  }
+
+  result_default <- agreement_metrics(x, analysis_col = "Analysis", metrics = "smd_agreement")
+  result_explicit_log <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement",
+    smd_scale = "log"
+  )
+
+  expect_equal(result_default[["_data"]], result_explicit_log[["_data"]])
+  expect_true(stringr::str_detect(
+    result_default[["_data"]][["smd_agreement"]],
+    sprintf("\\(%s\\)", format(expected_smd, digits = 2, nsmall = 2))
+  ))
+})
+
+test_that("agreement_metrics smd_scale = 'identity' skips the log transform", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.3, 0.2, 0.4, 0.5, 0.4, 0.6
+  )
+
+  expected_smd <- {
+    num <- 0.3 - 0.5
+    var_rct <- (0.4 - 0.2) / (2 * 1.96)
+    var_rwe <- (0.6 - 0.4) / (2 * 1.96)
+    num / sqrt(var_rct^2 + var_rwe^2)
+  }
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement",
+    smd_scale = "identity"
+  )
+
+  expect_true(stringr::str_detect(
+    result[["_data"]][["smd_agreement"]],
+    sprintf("\\(%s\\)", format(expected_smd, digits = 2, nsmall = 2))
+  ))
+})
+
+test_that("agreement_metrics smd_scale = 'logit' applies the logit transform", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.3, 0.2, 0.4, 0.5, 0.4, 0.6
+  )
+
+  logit <- function(p) log(p / (1 - p))
+  expected_smd <- {
+    num <- logit(0.3) - logit(0.5)
+    var_rct <- (logit(0.4) - logit(0.2)) / (2 * 1.96)
+    var_rwe <- (logit(0.6) - logit(0.4)) / (2 * 1.96)
+    num / sqrt(var_rct^2 + var_rwe^2)
+  }
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement",
+    smd_scale = "logit"
+  )
+
+  expect_true(stringr::str_detect(
+    result[["_data"]][["smd_agreement"]],
+    sprintf("\\(%s\\)", format(expected_smd, digits = 2, nsmall = 2))
+  ))
+})
+
+test_that("agreement_metrics smd_scale = 'cloglog' applies the complementary log-log transform for survival probabilities", {
+  # survival-probability-like data: RCT/RWE estimate within (lower, upper),
+  # all values strictly between 0 and 1
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.75, 0.70, 0.80, 0.70, 0.65, 0.75
+  )
+
+  cloglog <- function(p) log(-log(p))
+  expected_smd <- {
+    num <- cloglog(0.75) - cloglog(0.70)
+    # cloglog() is a *decreasing* function of p, so the transformed lower
+    # bound is numerically larger than the transformed upper bound -- sort()
+    # mirrors the reordering agreement_metrics() must apply internally
+    rct_t <- sort(c(cloglog(0.70), cloglog(0.80)))
+    rwe_t <- sort(c(cloglog(0.65), cloglog(0.75)))
+    var_rct <- (rct_t[2] - rct_t[1]) / (2 * 1.96)
+    var_rwe <- (rwe_t[2] - rwe_t[1]) / (2 * 1.96)
+    num / sqrt(var_rct^2 + var_rwe^2)
+  }
+
+  result <- agreement_metrics(
+    x,
+    analysis_col = "Analysis",
+    metrics = "smd_agreement",
+    smd_scale = "cloglog"
+  )
+
+  # regression check: without correctly reordering the transformed bounds,
+  # smd_agreement() would see lower > upper and error out, degrading this
+  # to "NA" via the tryCatch() path instead of a real SMD value
+  expect_false(stringr::str_detect(result[["_data"]][["smd_agreement"]], "^NA"))
+  expect_true(stringr::str_detect(
+    result[["_data"]][["smd_agreement"]],
+    sprintf("\\(%s\\)", format(expected_smd, digits = 2, nsmall = 2))
+  ))
+})
+
+test_that("agreement_metrics validates smd_scale", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Main analysis", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", smd_scale = "bogus"),
+    "should be one of"
+  )
+})
+
+test_that("agreement_metrics footnote text reflects the selected smd_scale", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.3, 0.2, 0.4, 0.5, 0.4, 0.6
+  )
+
+  footnote_for <- function(scale) {
+    result <- agreement_metrics(x, analysis_col = "Analysis", smd_scale = scale)
+    result[["_footnotes"]][["footnotes"]][[1]]
+  }
+
+  expect_true(stringr::str_detect(footnote_for("log"), "based on log-transformed estimates"))
+  expect_true(stringr::str_detect(footnote_for("identity"), "based on estimates' original scale"))
+  expect_true(stringr::str_detect(footnote_for("logit"), "based on logit-transformed estimates"))
+  expect_true(stringr::str_detect(
+    footnote_for("cloglog"),
+    "based on complementary log-log-transformed survival probabilities"
+  ))
+})
+
+test_that("agreement_metrics rounds estimates and CIs to <digits> before computing agreement", {
+  # RWE estimate 0.799 lies just outside the RCT CI [0.80, 0.90] unless rounded;
+  # RCT lower limit 1.004 is "significant" unless rounded to 1.00
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Estimate", 0.85, 0.80, 0.90, 0.799, 0.70, 0.90,
+    "Significance", 1.10, 1.004, 1.20, 1.00, 0.90, 1.10
+  )
+
+  # explicit digits = 2 and the default (2) both round
+  for (res in list(
+    agreement_metrics(x, analysis_col = "Analysis", digits = 2),
+    agreement_metrics(x, analysis_col = "Analysis")
+  )) {
+    expect_equal(res[["_data"]][["estimate_agreement"]][1], "Yes")
+    expect_equal(res[["_data"]][["significance_agreement"]][2], "Yes")
+  }
+
+  # no rounding: the borderline cases disagree
+  res_raw <- agreement_metrics(x, analysis_col = "Analysis", digits = NULL)
+  expect_equal(res_raw[["_data"]][["estimate_agreement"]][1], "No")
+  expect_equal(res_raw[["_data"]][["significance_agreement"]][2], "No")
+
+  # SMD is computed on the rounded values too
+  x_smd <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.8004, 0.7004, 0.9004, 0.8, 0.7, 0.9
+  )
+  smd_rounded <- agreement_metrics(x_smd, analysis_col = "Analysis", digits = 2)
+  expect_true(stringr::str_detect(smd_rounded[["_data"]][["smd_agreement"]], "Yes \\(0\\.00\\)"))
+
+  # invalid digits
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", digits = -1), "digits")
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", digits = "2"), "digits")
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", digits = c(1, 2)), "digits")
+})
+
+test_that("agreement_metrics displays estimates and limits with <digits> decimals", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.8123, 0.7123, 0.9123, 0.8, 0.7, 0.9
+  )
+
+  res3 <- agreement_metrics(x, analysis_col = "Analysis", digits = 3)
+  expect_equal(as.character(res3[["_data"]][["RCT"]]), "0.812 (0.712 - 0.912)")
+  expect_equal(as.character(res3[["_data"]][["RWE"]]), "0.800 (0.700 - 0.900)")
+
+  res0 <- suppressWarnings(agreement_metrics(x, analysis_col = "Analysis", digits = 0))
+  expect_equal(as.character(res0[["_data"]][["RCT"]]), "1 (1 - 1)")
+
+  # no rounding falls back to 2 displayed decimals
+  res_null <- agreement_metrics(x, analysis_col = "Analysis", digits = NULL)
+  expect_equal(as.character(res_null[["_data"]][["RCT"]]), "0.81 (0.71 - 0.91)")
+
+  # one tiny value must not change the decimals shown for other rows
+  x2 <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "a", 0.8, 0.7, 0.9, 0.8, 0.7, 0.9,
+    "b", 0.8, 0.7, 0.9, 0.8, 0.7, 0.9
+  )
+  x2$rwe_lower[2] <- 0.0012
+  res_rows <- agreement_metrics(x2, analysis_col = "Analysis", digits = NULL)
+  expect_equal(as.character(res_rows[["_data"]][["RWE"]][1]), "0.80 (0.70 - 0.90)")
+  expect_equal(as.character(res_rows[["_data"]][["RWE"]][2]), "0.80 (0.00 - 0.90)")
+
+  # documentation example: a RWE estimate of 0.799 and an RCT limit of 0.80
+  # agree once rounded, and are displayed consistently with that decision
+  x3 <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Doc example", 0.85, 0.80, 0.90, 0.799, 0.70, 0.90
+  )
+  res_doc <- agreement_metrics(x3, analysis_col = "Analysis", digits = 2)
+  expect_equal(res_doc[["_data"]][["estimate_agreement"]], "Yes")
+  expect_equal(as.character(res_doc[["_data"]][["RWE"]]), "0.80 (0.70 - 0.90)")
+
+  res_doc_raw <- agreement_metrics(x3, analysis_col = "Analysis", digits = NULL)
+  expect_equal(res_doc_raw[["_data"]][["estimate_agreement"]], "No")
+})
+
+test_that("agreement_metrics checks positivity after rounding", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Tiny", 0.004, 0.001, 0.009, 0.8, 0.7, 0.9
+  )
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis", digits = 2),
+    "RCT estimates must be positive.*after rounding"
+  )
+  # without rounding the estimate is valid
+  expect_no_error(agreement_metrics(x, analysis_col = "Analysis", digits = NULL))
+})
+
+test_that("agreement_metrics requires a data.frame with numeric estimate columns", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+  x$rct_lower <- as.character(x$rct_lower)
+  expect_error(agreement_metrics(x, analysis_col = "Analysis"), "must be numeric")
+  expect_error(agreement_metrics("not a df", analysis_col = "Analysis"), "not a data.frame")
+})
+
+test_that("agreement_metrics handles missing values without an obscure error", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Complete", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "Missing RWE estimate", 0.80, 0.70, 0.90, NA, 0.70, 0.90,
+    "Missing RCT limit", 0.80, NA, 0.90, 0.80, 0.70, 0.90
+  )
+
+  result <- suppressWarnings(agreement_metrics(x, analysis_col = "Analysis"))
+  expect_equal(result[["_data"]][["estimate_agreement"]], c("Yes", "NA", "NA"))
+  expect_equal(result[["_data"]][["significance_agreement"]], c("Yes", "Yes", "NA"))
+
+  # "NA" cells are excluded from the pooled denominator and the table renders
+  expect_no_error(gt::as_raw_html(
+    suppressWarnings(agreement_metrics(x, analysis_col = "Analysis", show_aggregate = TRUE))
+  ))
+  expect_equal(result$show_aggregate_total, "100% (4/4)")
+})
+
+test_that("agreement_metrics rejects malformed confidence intervals", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "ok", 0.80, 0.70, 0.90, 0.80, 0.70, 0.90,
+    "bad RWE", 0.80, 0.70, 0.90, 0.80, 0.90, 0.70
+  )
+  expect_error(
+    agreement_metrics(x, analysis_col = "Analysis"),
+    "RWE estimate must lie within its confidence limits.*row\\(s\\): 2"
+  )
+
+  x2 <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "estimate outside", 0.95, 0.70, 0.90, 0.80, 0.70, 0.90
+  )
+  expect_error(
+    agreement_metrics(x2, analysis_col = "Analysis"),
+    "RCT estimate must lie within its confidence limits"
+  )
+})
+
+test_that("agreement_metrics validates smd_threshold and whole-number digits", {
+  x <- tibble::tribble(
+    ~Analysis, ~rct_estimate, ~rct_lower, ~rct_upper, ~rwe_estimate, ~rwe_lower, ~rwe_upper,
+    "Test", 0.87, 0.78, 0.97, 0.82, 0.76, 0.87
+  )
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", smd_threshold = -1), "smd_threshold")
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", smd_threshold = "a"), "smd_threshold")
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", smd_threshold = c(1, 2)), "smd_threshold")
+  expect_error(agreement_metrics(x, analysis_col = "Analysis", digits = 1.5), "digits")
 })

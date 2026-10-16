@@ -7,7 +7,8 @@
 km_pooling(
   x = NULL,
   surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat),
-  times = NULL
+  times = NULL,
+  ...
 )
 }
 \arguments{
@@ -17,6 +18,15 @@ km_pooling(
 
 \item{times}{numeric vector of follow-up time points at which survival probabilities are to be estimated (propagated to \code{\link[ggsurvfit]{tidy_survfit}}).
 If NULL (default), survival probabilities are estimated and pooled across all observed event times.}
+
+\item{...}{additional arguments passed on to the per-imputation
+\code{\link[ggsurvfit]{survfit2}} call (and onwards to \code{\link[survival]{survfit}}),
+e.g. \code{type = "fleming-harrington"}.
+The arguments \code{formula}, \code{data}, \code{weights}, \code{cluster} and \code{robust}
+are set internally by \code{km_pooling()} and will throw an error if supplied here.
+Note that \code{...} only affects the underlying Kaplan-Meier fit of each imputed and
+matched/weighted dataset; the complementary log-log transformation, Rubin's rule pooling and
+confidence interval computation are unaffected.}
 }
 \value{
 list with pooled median survival estimate and pooled Kaplan-Meier curve
@@ -169,6 +179,19 @@ More references:
 
  # KM curve
  km_out$km_plot
+
+ # pass additional arguments to the underlying survfit2() call:
+ # pass a column-based NSE argument (e.g. id = patientid) through `...`;
+ # patientid is resolved as a column of each imputed/weighted dataset.
+ # survfit() uses `id` as the subject identifier for its robust/sandwich
+ # variance calculation, clustering rows by patient instead of treating
+ # each row as its own independent cluster (relevant if a patient can
+ # contribute more than one row, e.g. with time-varying covariates).
+ km_out_id <- km_pooling(
+   x = wimids,
+   surv_formula = km_fit,
+   id = patientid
+   )
 
 }
 \seealso{

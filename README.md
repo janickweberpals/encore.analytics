@@ -41,7 +41,8 @@ The package implements various methodologies for:
 - Multiple imputation of missing data
 - Propensity score estimation and matching
 - Survival analysis with multiply imputed data
-- Agreement metrics for assessing consistency across imputed datasets
+- Agreement metrics for comparing randomized controlled trial (RCT) and
+  real-world evidence (RWE) emulation study results
 - Specialized visualization tools for survival outcomes
 
 ## Key Features
@@ -53,8 +54,10 @@ The package implements various methodologies for:
   Kaplan-Meier curves from multiple imputations
 - **Raking Weights**: Methods for calibrating weights in propensity
   score analyses
-- **Agreement Metrics**: Functions to assess consistency and agreement
-  across imputed datasets
+- **Agreement Metrics**: Functions to assess agreement between RCT and
+  RWE emulation study results, with configurable metrics, aggregate
+  agreement summaries, and transforms (log, logit, log-log) for
+  different effect-size scales
 - **Table 1 Generation**: Utilities for creating descriptive statistics
   tables
 - **Data Simulation**: Tools for generating synthetic datasets for
@@ -86,8 +89,8 @@ The documentation includes:
     survival analyses with multiple imputations
 3.  **Raking Weights**: Implementation of weight calibration methods
 4.  **Kaplan-Meier Pooling**: Techniques for combining survival curves
-5.  **Agreement Metrics**: Methods for assessing consistency across
-    imputations
+5.  **Agreement Metrics**: Methods for assessing agreement between RCT
+    and RWE emulation study results
 
 ## Implementation Details
 
@@ -119,6 +122,6 @@ like to change.
 
 If you use `encore.analytics` in your research, please cite it as:
 
-    Weberpals J (2025). encore.analytics: Multiple Imputation and Propensity Score 
-    Workflows for Oncology Trial Emulation. R package version 0.1.0.
+    Weberpals J (2026). encore.analytics: Multiple Imputation and Propensity Score
+    Workflows for Oncology Trial Emulation. R package version 0.3.0.
     https://github.com/janickweberpals/encore.analytics

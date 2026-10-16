@@ -4,13 +4,32 @@
 #' with real-world evidence (RWE) emulation studies by calculating agreement metrics.
 #'
 #' @details
-#' Calculates three types of agreement metrics:
-#' - Statistical significance agreement: Same direction and statistical significance
+#' Calculates up to three types of agreement metrics, controlled via the `metrics`
+#' argument:
+#' - Statistical significance agreement: RCT and RWE confidence intervals fall on the
+#'   same side of the null value of 1 (both entirely above, both entirely below, or
+#'   both include the null, i.e. both non-significant)
 #' - Estimate agreement: RWE estimate within RCT confidence interval
 #' - SMD agreement: Standardized mean difference below threshold (default 1.96)
 #'
+#' Metrics excluded via `metrics` are not computed at all (not just hidden from
+#' the output), which is relevant for the SMD calculation in particular, since it
+#' is the most expensive step and may not be meaningful for all effect size types.
+#'
 #' All estimates should be hazard ratios (HR) and must be positive.
-#' Estimates are log-transformed for SMD calculation.
+#' Estimates are transformed before the SMD calculation according to `smd_scale`
+#' (log-transformed by default).
+#'
+#' **Known limitation for non-ratio-scale effect sizes**: `smd_scale` only changes
+#' the transform used inside the SMD calculation. It does not change the function's
+#' other ratio-scale assumptions: the positivity check on `rct_estimate`/`rwe_estimate`
+#' and `significance_agreement`'s comparison against a null value of 1 are applied
+#' regardless of `smd_scale`. For example, setting `smd_scale = "identity"` to use a
+#' risk difference still requires positive input values and still evaluates
+#' statistical significance against a null of 1 rather than 0 — both of which are
+#' incorrect for a difference-scale measure. This is a known, currently unaddressed
+#' limitation; `agreement_metrics()` is designed for ratio-scale effect measures
+#' (HR, OR, RR, IRR) beyond just the SMD calculation.
 #'
 #' @importFrom tidyr pivot_wider pivot_longer
 #' @importFrom smd smd
@@ -27,8 +46,52 @@
 #'
 #' @param analysis_col Character. Name of column identifying different analyses
 #' @param group_col Character. Optional. Name of column for grouping results (e.g., database)
-#' @param estimate_label Character. Label for estimates in table header. Default: "HR (95% CI)"
-#' @param smd_threshold Numeric. Threshold for SMD agreement. Default: 1.96 (alpha=0.05)
+#' @param estimate_label Character. Label for estimates in table header. Default: "HR (95% CI)".
+#' If the value is one of "HR (95% CI)", "OR (95% CI)", or "RR (95% CI)", the table footnote
+#' includes a matching abbreviation definition (e.g. "HR = Hazard ratio"); any other value is
+#' used as-is for the header without adding an abbreviation definition to the footnote.
+#' @param smd_threshold Numeric. Threshold for SMD agreement; a single positive number.
+#' Default: 1.96 (alpha=0.05)
+#' @param smd_scale Character. Which transform to apply to the RCT/RWE estimates and
+#' confidence limits before computing the SMD. One of "log" (default), "identity",
+#' "logit", or "cloglog". "log" is appropriate for ratio-scale measures (HR, OR, RR, IRR),
+#' since their confidence intervals are constructed via the delta method on the log
+#' scale. "identity" skips the transform, for measures already on an additive/difference
+#' scale (e.g. risk differences). "logit" is for proportions bounded on \[0, 1\].
+#' "cloglog" is the complementary log-log transform, `log(-log(p))`, and is the correct
+#' scale for comparing survival probabilities (e.g. Kaplan-Meier estimates such as those
+#' from [km_pooling()]) — it matches the "log-log" confidence interval method used by
+#' `survival::survfit()` (`conf.type = "log-log"`). Each option expects inputs in a
+#' particular domain (log: > 0; logit and cloglog: strictly between 0 and 1; identity:
+#' any real number); values outside that domain will silently produce an "NA" SMD
+#' agreement result for that row rather than raising an error. "cloglog" is a decreasing
+#' function of its input, so the lower/upper confidence limits are automatically
+#' reordered after transforming to preserve the lower-less-than-upper invariant required
+#' internally. See Details for a related limitation that `smd_scale` does not address.
+#' @param metrics Character vector. Which agreement metrics to compute and display.
+#' Must be a subset of "significance_agreement", "estimate_agreement", "smd_agreement".
+#' Default: all three. Metrics excluded here are skipped entirely (not computed), which
+#' is most relevant for "smd_agreement" since it is the most expensive metric to compute
+#' and may not be meaningful for all effect size types.
+#' @param show_aggregate Logical. If TRUE, adds a summary row at the bottom of the table
+#' with the pooled agreement percentage for each selected metric (Yes / (Yes + No) across
+#' all rows, excluding "NA" cells, e.g. failed SMD calculations, from the denominator).
+#' Default: FALSE.
+#' @param show_aggregate_total Logical. If TRUE, adds a source note below the table with
+#' a single agreement percentage pooled across all selected metrics and all rows combined,
+#' using the same Yes / (Yes + No) logic as `show_aggregate`. Default: TRUE. When TRUE, the
+#' formatted percentage string (e.g. "78% (109/140)") is also attached directly to the
+#' returned gt object as `show_aggregate_total`, so it can be accessed programmatically
+#' (e.g. `result$show_aggregate_total`) without parsing it back out of the source note text.
+#' @param digits Whole number or NULL. If not NULL, all RCT and RWE point estimates and
+#' confidence limits are rounded to this many decimal places *before* any agreement
+#' metric (significance, estimate, SMD) is computed, so that, for example, a RWE estimate
+#' of 0.799 and an RCT confidence limit of 0.80 lead to an estimate agreement when `digits = 2`.
+#' The estimates and limits are displayed with this many decimals (the SMD is always shown
+#' with 2). Estimates must be positive and each interval must satisfy
+#' `lower <= estimate <= upper`, checked after rounding. Missing values are allowed and
+#' give an "NA" agreement result for the affected metric. A pre-existing `smd_value` column in `x`
+#' is not recomputed or rounded. Default: 2. Set to NULL to disable rounding.
 #'
 #' @return A gt table object with formatted agreement metrics
 #'
@@ -74,83 +137,272 @@
 #' agreement_metrics(x, analysis_col = "Analysis", group_col = "Database")
 #'
 #' @export
-agreement_metrics <- function(x,
-                              analysis_col,
-                              group_col = NULL, # subgroup, e.g, database
-                              estimate_label = "HR (95% CI)",
-                              smd_threshold = 1.96 # customizable threshold for SMD agreement
-                              ){
-
+agreement_metrics <- function(
+  x,
+  analysis_col,
+  group_col = NULL, # subgroup, e.g, database
+  estimate_label = "HR (95% CI)",
+  smd_threshold = 1.96, # customizable threshold for SMD agreement
+  metrics = c(
+    "significance_agreement",
+    "estimate_agreement",
+    "smd_agreement"
+  ), # which agreement metrics to compute and display
+  show_aggregate = FALSE, # add a per-metric pooled agreement % summary row
+  show_aggregate_total = TRUE, # add a pooled agreement % source note across all metrics
+  smd_scale = c("log", "identity", "logit", "cloglog"), # transform applied before the SMD calculation
+  digits = 2 # rounding of estimates/CIs before agreement metrics are computed (NULL = no rounding)
+) {
   # input checks
-  assertthat::assert_that(any(class(x) %in% c("data.frame", "tibble")), msg = "<x> is not a data.frame or tibble")
-  assertthat::assert_that(all(c("rct_estimate", "rct_lower", "rct_upper", "rwe_estimate", "rwe_lower", "rwe_upper") %in% colnames(x)), msg = "<x> does not contain all required columns")
-  assertthat::assert_that(!is.null(analysis_col), msg = "<analysis_col> cannot be NULL")
-  assertthat::assert_that(analysis_col %in% colnames(x), msg = sprintf("<analysis_col> '%s' not found in <x>", analysis_col))
-  if(!is.null(group_col)) assertthat::assert_that(group_col %in% colnames(x), msg = "<group_col> not in <x>")
+  assertthat::assert_that(
+    is.data.frame(x),
+    msg = "<x> is not a data.frame or tibble"
+  )
+  value_cols <- c(
+    "rct_estimate",
+    "rct_lower",
+    "rct_upper",
+    "rwe_estimate",
+    "rwe_lower",
+    "rwe_upper"
+  )
+  assertthat::assert_that(
+    all(value_cols %in% colnames(x)),
+    msg = "<x> does not contain all required columns"
+  )
+  assertthat::assert_that(
+    all(vapply(x[value_cols], is.numeric, logical(1))),
+    msg = "RCT/RWE estimate and confidence limit columns must be numeric"
+  )
+  assertthat::assert_that(
+    !is.null(analysis_col),
+    msg = "<analysis_col> cannot be NULL"
+  )
+  assertthat::assert_that(
+    analysis_col %in% colnames(x),
+    msg = sprintf("<analysis_col> '%s' not found in <x>", analysis_col)
+  )
+  if (!is.null(group_col)) {
+    assertthat::assert_that(
+      group_col %in% colnames(x),
+      msg = "<group_col> not in <x>"
+    )
+  }
 
-  # check for non-positive values
-  assertthat::assert_that(all(x$rct_estimate > 0), msg = "RCT estimates must be positive for hazard ratios")
-  assertthat::assert_that(all(x$rwe_estimate > 0), msg = "RWE estimates must be positive for hazard ratios")
+  valid_metrics <- c(
+    "significance_agreement",
+    "estimate_agreement",
+    "smd_agreement"
+  )
+  assertthat::assert_that(
+    is.character(metrics) && length(metrics) >= 1,
+    msg = "<metrics> must be a non-empty character vector"
+  )
+  assertthat::assert_that(
+    all(metrics %in% valid_metrics),
+    msg = sprintf(
+      "<metrics> must be a subset of: %s",
+      paste(valid_metrics, collapse = ", ")
+    )
+  )
+  # canonicalize order so output columns/labels/styling are stable
+  # regardless of the order metrics was supplied in
+  metrics <- valid_metrics[valid_metrics %in% metrics]
+
+  assertthat::assert_that(
+    is.logical(show_aggregate) && length(show_aggregate) == 1,
+    msg = "<show_aggregate> must be a single logical value"
+  )
+  assertthat::assert_that(
+    is.logical(show_aggregate_total) && length(show_aggregate_total) == 1,
+    msg = "<show_aggregate_total> must be a single logical value"
+  )
+
+  smd_scale <- match.arg(smd_scale)
+
+  assertthat::assert_that(
+    is.null(digits) ||
+      (is.numeric(digits) &&
+        length(digits) == 1 &&
+        !is.na(digits) &&
+        digits >= 0 &&
+        digits == round(digits)),
+    msg = "<digits> must be NULL or a single non-negative whole number"
+  )
+  assertthat::assert_that(
+    is.numeric(smd_threshold) &&
+      length(smd_threshold) == 1 &&
+      !is.na(smd_threshold) &&
+      smd_threshold > 0,
+    msg = "<smd_threshold> must be a single positive number"
+  )
+
+  # round estimates and confidence limits up front, so that all agreement
+  # metrics (including the SMD) are computed on the rounded values, e.g. a
+  # RWE estimate of 0.799 and an RCT limit of 0.80 agree when digits = 2
+  if (!is.null(digits)) {
+    x <- x |>
+      dplyr::mutate(dplyr::across(
+        dplyr::all_of(value_cols),
+        ~ round(.x, digits = digits)
+      ))
+  }
+
+  # check for non-positive values (after rounding, since a small positive
+  # estimate can round to 0 and would otherwise silently yield an NA SMD);
+  # missing values are allowed and yield "NA" agreement results
+  rounding_hint <- if (is.null(digits)) {
+    ""
+  } else {
+    sprintf(" (after rounding to <digits> = %s)", digits)
+  }
+  assertthat::assert_that(
+    all(x$rct_estimate > 0, na.rm = TRUE),
+    msg = paste0("RCT estimates must be positive for hazard ratios", rounding_hint)
+  )
+  assertthat::assert_that(
+    all(x$rwe_estimate > 0, na.rm = TRUE),
+    msg = paste0("RWE estimates must be positive for hazard ratios", rounding_hint)
+  )
+
+  # check that each interval is well-formed: lower <= estimate <= upper
+  for (src in c("rct", "rwe")) {
+    est <- x[[paste0(src, "_estimate")]]
+    lo <- x[[paste0(src, "_lower")]]
+    up <- x[[paste0(src, "_upper")]]
+    bad <- which(lo > up | est < lo | est > up)
+    assertthat::assert_that(
+      length(bad) == 0,
+      msg = sprintf(
+        "%s estimate must lie within its confidence limits (lower <= estimate <= upper)%s; check row(s): %s",
+        toupper(src),
+        rounding_hint,
+        paste(bad, collapse = ", ")
+      )
+    )
+  }
 
   # if no smd_value present in the results table, calculate it
-  if(!"smd_value" %in% colnames(x)){
+  if ("smd_agreement" %in% metrics && !"smd_value" %in% colnames(x)) {
+    transform_fn <- switch(
+      smd_scale,
+      log = log,
+      identity = identity,
+      logit = stats::qlogis,
+      # complementary log-log: correct scale for comparing survival
+      # probabilities (matches survival::survfit(conf.type = "log-log"))
+      cloglog = function(p) log(-log(p))
+    )
+
     x <- x |>
       dplyr::rowwise() |>
       dplyr::mutate(
-        smd_value = tryCatch({
-          smd_agreement(
-            rct_estimate = log(rct_estimate),
-            rct_lower = log(rct_lower),
-            rct_upper = log(rct_upper),
-            rwe_estimate = log(rwe_estimate),
-            rwe_lower = log(rwe_lower),
-            rwe_upper = log(rwe_upper)
-          )
-        }, error = function(e) {
-          warning(sprintf("SMD calculation failed: %s", e$message))
-          NA_real_
-        })
+        smd_value = tryCatch(
+          {
+            # cloglog is a decreasing function of its input, unlike the other
+            # transforms; pmin()/pmax() re-sort the transformed bounds so
+            # <lower> stays below <upper> regardless of the transform's
+            # direction (a no-op for the increasing transforms above)
+            rct_t_lower <- transform_fn(rct_lower)
+            rct_t_upper <- transform_fn(rct_upper)
+            rwe_t_lower <- transform_fn(rwe_lower)
+            rwe_t_upper <- transform_fn(rwe_upper)
+            smd_agreement(
+              rct_estimate = transform_fn(rct_estimate),
+              rct_lower = pmin(rct_t_lower, rct_t_upper),
+              rct_upper = pmax(rct_t_lower, rct_t_upper),
+              rwe_estimate = transform_fn(rwe_estimate),
+              rwe_lower = pmin(rwe_t_lower, rwe_t_upper),
+              rwe_upper = pmax(rwe_t_lower, rwe_t_upper)
+            )
+          },
+          error = function(e) {
+            warning(sprintf("SMD calculation failed: %s", e$message))
+            NA_real_
+          }
+        )
       ) |>
       dplyr::ungroup()
   }
 
-  # calculate agreement metrics
-  x <- x |>
-    dplyr::mutate(
-      # significance agreement with additional categories
-      significance_agreement = dplyr::case_when(
-        # superiority
-        rct_estimate < 1 & rct_upper < 1 & rwe_estimate < 1 & rwe_upper < 1 ~ "Yes",
-        # non-inferiority
-        rct_estimate < 1 & rct_upper >= 1 & rwe_estimate < 1 & rwe_upper >= 1 ~ "Yes",
-        # inferiority
-        rct_estimate >= 1 & rct_lower >= 1 & rwe_estimate >= 1 & rwe_upper >= 1 ~ "Yes",
-        # all other cases
-        TRUE ~ "No"
-        ),
-
-      # estimate agreement
-      estimate_agreement = dplyr::if_else(
-        rwe_estimate >= rct_lower & rwe_estimate <= rct_upper, "Yes", "No"
-        ),
-
-      # smd agreement using parameter
-      smd_agreement = dplyr::case_when(
-        is.na(smd_value) ~ "NA",
-        abs(smd_value) < smd_threshold ~ "Yes",
-        TRUE ~ "No"
+  # calculate agreement metrics (only the ones requested via <metrics>)
+  if ("significance_agreement" %in% metrics) {
+    x <- x |>
+      dplyr::mutate(
+        # significance agreement: RCT and RWE agree if their CIs fall in the
+        # same position relative to the null (both entirely above, both
+        # entirely below, or both straddling/touching it)
+        significance_agreement = dplyr::case_when(
+          # missing confidence limits: agreement cannot be assessed
+          is.na(rct_lower) | is.na(rct_upper) | is.na(rwe_lower) | is.na(rwe_upper) ~ "NA",
+          # both significantly above the null
+          rct_lower > 1 & rwe_lower > 1 ~ "Yes",
+          # both significantly below the null
+          rct_upper < 1 & rwe_upper < 1 ~ "Yes",
+          # both null (CI includes 1)
+          (rct_lower <= 1 & rct_upper >= 1) &
+            (rwe_lower <= 1 & rwe_upper >= 1) ~ "Yes",
+          # all other cases
+          TRUE ~ "No"
         )
       )
+  }
+
+  if ("estimate_agreement" %in% metrics) {
+    x <- x |>
+      dplyr::mutate(
+        estimate_agreement = dplyr::case_when(
+          is.na(rwe_estimate) | is.na(rct_lower) | is.na(rct_upper) ~ "NA",
+          rwe_estimate >= rct_lower & rwe_estimate <= rct_upper ~ "Yes",
+          TRUE ~ "No"
+        )
+      )
+  }
+
+  if ("smd_agreement" %in% metrics) {
+    x <- x |>
+      dplyr::mutate(
+        smd_agreement = dplyr::case_when(
+          is.na(smd_value) ~ "NA",
+          abs(smd_value) < smd_threshold ~ "Yes",
+          TRUE ~ "No"
+        )
+      )
+  }
 
   # format table for display
   x_format <- x |>
-    dplyr::mutate(dplyr::across(where(is.numeric), ~ format(.x, digits = 2, nsmall = 2))) |>
+    dplyr::mutate(
+      # estimates/limits are shown with the same precision they were rounded
+      # to (2 decimals if rounding is off); the SMD is always shown with 2
+      dplyr::across(
+        dplyr::all_of(value_cols),
+        ~ sprintf("%.*f", if (is.null(digits)) 2L else as.integer(digits), .x)
+      ),
+      dplyr::across(
+        dplyr::any_of("smd_value"),
+        ~ sprintf("%.2f", .x)
+      )
+    ) |>
     dplyr::mutate(
       RCT = glue::glue("{rct_estimate} ({rct_lower} - {rct_upper})"),
-      RWE = glue::glue("{rwe_estimate} ({rwe_lower} - {rwe_upper})"),
-      smd_agreement = glue::glue("{smd_agreement} ({smd_value})")
-      ) |>
-    dplyr::select(dplyr::all_of(c(analysis_col, group_col)), "RCT", "RWE", "significance_agreement", "estimate_agreement", "smd_agreement")
+      RWE = glue::glue("{rwe_estimate} ({rwe_lower} - {rwe_upper})")
+    )
+
+  if ("smd_agreement" %in% metrics) {
+    x_format <- x_format |>
+      dplyr::mutate(
+        smd_agreement = glue::glue("{smd_agreement} ({smd_value})")
+      )
+  }
+
+  x_format <- x_format |>
+    dplyr::select(
+      dplyr::all_of(c(analysis_col, group_col)),
+      "RCT",
+      "RWE",
+      dplyr::all_of(metrics)
+    )
 
   # conditional grouping
   if (!is.null(group_col)) {
@@ -158,21 +410,40 @@ agreement_metrics <- function(x,
       dplyr::group_by(dplyr::across(dplyr::all_of(group_col)))
   }
 
+  # pooled "Yes / (Yes + No)" agreement percentage for a metric column;
+  # "NA" cells (e.g. failed SMD calculations) are excluded from the
+  # denominator. Works on both plain "Yes"/"No" columns and the glued
+  # "Yes (0.32)"-style smd_agreement display column via str_detect
+  pct_agreement <- function(col) {
+    yes <- sum(stringr::str_detect(as.character(col), "Yes"))
+    no <- sum(stringr::str_detect(as.character(col), "No"))
+    n <- yes + no
+    if (n == 0) {
+      NA_character_
+    } else {
+      sprintf("%.0f%% (%d/%d)", 100 * yes / n, yes, n)
+    }
+  }
+
   # create and format gt table
+  all_labels <- list(
+    significance_agreement = gt::md(
+      "Statistical <br> significance <br> agreement"
+    ),
+    estimate_agreement = gt::md("Estimate <br> agreement"),
+    smd_agreement = "SMD"
+  )
+
   x_gt <- x_format |>
     gt::gt() |>
     gt::tab_spanner(
       label = estimate_label,
       columns = c("RCT", "RWE")
-      ) |>
-    gt::cols_label(
-      significance_agreement = gt::md("Statistical <br> significance <br> agreement"),
-      estimate_agreement = gt::md("Estimate <br> agreement"),
-      smd_agreement = "SMD"
-      )
+    ) |>
+    gt::cols_label(!!!all_labels[metrics])
 
   # apply styles for agreement columns
-  for (col in c("significance_agreement", "estimate_agreement", "smd_agreement")) {
+  for (col in metrics) {
     x_gt <- x_gt |>
       gt::tab_style(
         style = gt::cell_text(color = "darkgreen"),
@@ -198,26 +469,88 @@ agreement_metrics <- function(x,
       )
   }
 
+  # per-metric pooled agreement % summary row
+  # note: the summary function is inlined (rather than calling the local
+  # pct_agreement() helper) because gt evaluates <fns> lazily at render
+  # time, outside the scope in which a local closure would be resolvable
+  if (show_aggregate) {
+    x_gt <- x_gt |>
+      gt::grand_summary_rows(
+        columns = dplyr::all_of(metrics),
+        fns = list(
+          `% Agreement` = ~ {
+            yes <- sum(stringr::str_detect(as.character(.), "Yes"))
+            no <- sum(stringr::str_detect(as.character(.), "No"))
+            n <- yes + no
+            if (n == 0) {
+              NA_character_
+            } else {
+              sprintf("%.0f%% (%d/%d)", 100 * yes / n, yes, n)
+            }
+          }
+        ),
+        missing_text = "--"
+      )
+  }
+
   # footnote estimate label
-  if(estimate_label == "HR (95% CI)") footnote_label <- "HR = Hazard ratio"
+  footnote_label <- switch(
+    estimate_label,
+    "HR (95% CI)" = "HR = Hazard ratio",
+    "OR (95% CI)" = "OR = Odds ratio",
+    "RR (95% CI)" = "RR = Rate ratio",
+    NULL
+  )
+
+  smd_scale_label <- switch(
+    smd_scale,
+    log = "based on log-transformed estimates",
+    identity = "based on estimates' original scale",
+    logit = "based on logit-transformed estimates",
+    cloglog = "based on complementary log-log-transformed survival probabilities"
+  )
+
+  abbrev_parts <- c(
+    "CI = Confidence interval",
+    footnote_label,
+    "RCT = Randomized controlled trial",
+    "RWE = Real-world evidence",
+    if ("smd_agreement" %in% metrics) {
+      sprintf("SMD = standardized mean difference (%s)", smd_scale_label)
+    }
+  )
+  abbreviations <- paste0(
+    "Abbreviations: ",
+    paste(abbrev_parts, collapse = ", ")
+  )
 
   # Add bold styling for headers
   x_gt <- x_gt |>
     gt::tab_style(
       style = gt::cell_text(weight = "bold"),
       locations = gt::cells_column_labels()
-      ) |>
+    ) |>
     gt::tab_style(
       style = gt::cell_text(weight = "bold"),
       locations = gt::cells_column_spanners()
-      ) |>
+    ) |>
     gt::tab_style(
       style = gt::cell_text(weight = "bold"),
       locations = gt::cells_row_groups()
-      ) |>
-    gt::tab_footnote(
-      glue::glue("Abbreviations: CI = Confidence interval, {footnote_label}, RCT = Randomized controlled trial, RWE = Real-world evidence, SMD = standardized mean difference (based on log hazard ratios)")
+    ) |>
+    gt::tab_footnote(abbreviations)
+
+  # pooled agreement % across all selected metrics combined
+  if (show_aggregate_total) {
+    total_pct <- pct_agreement(unlist(x_format[metrics]))
+    x_gt <- x_gt |>
+      gt::tab_source_note(
+        glue::glue("Overall agreement across all metrics: {total_pct}")
       )
+    # also expose the pooled percentage directly on the returned object,
+    # so callers don't have to parse it back out of the source note text
+    x_gt$show_aggregate_total <- total_pct
+  }
 
   return(x_gt)
 }

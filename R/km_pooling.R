@@ -83,8 +83,16 @@
 #'
 #' @param x imputed and matched (mimids) or weighted (wimids) object
 #' @param surv_formula specification of survival model formula to be fitted
-#' @param times numeric vector of follow-up time points at which survival probabilities are to be estimated (propagated to \code{\link[ggsurvfit]{tidy_survfit}}). 
+#' @param times numeric vector of follow-up time points at which survival probabilities are to be estimated (propagated to \code{\link[ggsurvfit]{tidy_survfit}}).
 #' If NULL (default), survival probabilities are estimated and pooled across all observed event times.
+#' @param ... additional arguments passed on to the per-imputation
+#' \code{\link[ggsurvfit]{survfit2}} call (and onwards to \code{\link[survival]{survfit}}),
+#' e.g. \code{type = "fleming-harrington"}.
+#' The arguments \code{formula}, \code{data}, \code{weights}, \code{cluster} and \code{robust}
+#' are set internally by \code{km_pooling()} and will throw an error if supplied here.
+#' Note that \code{...} only affects the underlying Kaplan-Meier fit of each imputed and
+#' matched/weighted dataset; the complementary log-log transformation, Rubin's rule pooling and
+#' confidence interval computation are unaffected.
 #'
 #' @return list with pooled median survival estimate and pooled Kaplan-Meier curve
 #' \code{km_median_survival}:
@@ -153,62 +161,124 @@
 #'  # KM curve
 #'  km_out$km_plot
 #'
-km_pooling <- function(x = NULL,
-                       surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat),
-                       times = NULL
-                       ){
-
-
+#'  # pass additional arguments to the underlying survfit2() call:
+#'  # pass a column-based NSE argument (e.g. id = patientid) through `...`;
+#'  # patientid is resolved as a column of each imputed/weighted dataset.
+#'  # survfit() uses `id` as the subject identifier for its robust/sandwich
+#'  # variance calculation, clustering rows by patient instead of treating
+#'  # each row as its own independent cluster (relevant if a patient can
+#'  # contribute more than one row, e.g. with time-varying covariates).
+#'  km_out_id <- km_pooling(
+#'    x = wimids,
+#'    surv_formula = km_fit,
+#'    id = patientid
+#'    )
+#'
+km_pooling <- function(
+  x = NULL,
+  surv_formula = stats::as.formula(
+    survival::Surv(fu_itt_months, death_itt) ~ treat
+  ),
+  times = NULL,
+  ...
+) {
   # input checks ------------------------------------------------------------
 
   # check if x is a mimids or wimids object
-  assertthat::assert_that(inherits(x, c("mimids", "wimids")), msg = "<x> needs to be a mimids or wimids object")
+  assertthat::assert_that(
+    inherits(x, c("mimids", "wimids")),
+    msg = "<x> needs to be a mimids or wimids object"
+  )
   # check if surv_formula is a formula
-  assertthat::assert_that(inherits(surv_formula, "formula"), msg = "<surv_formula> needs to be a formula")
+  assertthat::assert_that(
+    inherits(surv_formula, "formula"),
+    msg = "<surv_formula> needs to be a formula"
+  )
   # check weights and subclass
-  assertthat::assert_that("weights" %in% names(MatchThem::complete(x)), msg = "<x> needs to contain a weights column")
+  assertthat::assert_that(
+    "weights" %in% names(MatchThem::complete(x)),
+    msg = "<x> needs to contain a weights column"
+  )
   # check if weights and subclass are in the data
-  if(inherits(x, "mimids")){
-    assertthat::assert_that("subclass" %in% names(MatchThem::complete(x)), msg = "<x> needs to contain a weights column")
+  if (inherits(x, "mimids")) {
+    assertthat::assert_that(
+      "subclass" %in% names(MatchThem::complete(x)),
+      msg = "<x> needs to contain a weights column"
+    )
   }
-  if(!is.null(times)) assertthat::assert_that(is.numeric(times), msg = "<times> needs to be a numeric vector")
+  if (!is.null(times)) {
+    assertthat::assert_that(
+      is.numeric(times),
+      msg = "<times> needs to be a numeric vector"
+    )
+  }
+
+  # check that ... does not try to override arguments set internally
+  # (...names() reads argument names without forcing/evaluating them, since
+  # some, like `id`, are intended to be resolved as columns of the imputed
+  # data further down rather than as objects that exist here)
+  reserved_dots <- intersect(
+    ...names(),
+    c("formula", "data", "weights", "cluster", "robust")
+  )
+  assertthat::assert_that(
+    length(reserved_dots) == 0,
+    msg = paste0(
+      "arguments passed via `...` must not include arguments that are set internally by km_pooling(): ",
+      paste(reserved_dots, collapse = ", ")
+    )
+  )
+
+  # capture the *unevaluated* expressions behind `...` (e.g. list(id = patientid)
+  # becomes list(id = quote(patientid))). This must not be `list(...)`: some
+  # arguments (like `id`) are column names meant to be resolved against
+  # `data = i` inside survfit(), not objects that exist in this environment,
+  # and `list(...)` would force and fail on them immediately.
+  extra_args <- as.list(substitute(list(...)))[-1]
 
   # Fit Kaplan Meier --------------------------------------------------------
 
   # first, we fit a survival function for ith dataset
-  compute_km <- function(i){
-
+  #
+  # The survfit2() call is built with as.call()/eval() rather than written
+  # literally with a trailing `...`. ggsurvfit::survfit2() reconstructs its
+  # call internally (match.call(expand.dots = TRUE)) to dispatch to
+  # survival::survfit(); if `...` is spliced in literally at this call site,
+  # that reconstruction degrades NSE arguments like `id` into positional
+  # `..1`-style placeholders that no longer resolve once survfit() tries to
+  # evaluate them as columns of `data = i`. Building the call explicitly with
+  # `formula`/`data`/`weights`/`cluster` kept as plain symbols (resolved by
+  # survfit() against `data = i`, exactly like a literal call would) and
+  # `extra_args` spliced in by value avoids that.
+  compute_km <- function(i) {
     # compute the survival function for dataset i
 
     ## for weighting
-    if(inherits(x, "wimids")){
-
-      survfit_fit <- ggsurvfit::survfit2(
-        formula = surv_formula,
-        weights = weights,
-        robust = T,
-        data = i
-        )
-
+    if (inherits(x, "wimids")) {
+      base_args <- list(
+        formula = quote(surv_formula),
+        weights = quote(weights),
+        robust = TRUE,
+        data = quote(i)
+      )
     }
 
     ## for matching
-    if(inherits(x, "mimids")){
-
-      survfit_fit <- ggsurvfit::survfit2(
-        formula = surv_formula,
-        weights = weights,
-        cluster = subclass,
-        robust = T,
-        data = i
-        )
-
+    if (inherits(x, "mimids")) {
+      base_args <- list(
+        formula = quote(surv_formula),
+        weights = quote(weights),
+        cluster = quote(subclass),
+        robust = TRUE,
+        data = quote(i)
+      )
     }
 
+    call_expr <- as.call(c(quote(ggsurvfit::survfit2), base_args, extra_args))
+    survfit_fit <- eval(call_expr, envir = environment())
+
     return(survfit_fit)
-
   }
-
 
   # compute KM across all imputed (and weighted/matched) datasets --------------------
 
@@ -220,12 +290,16 @@ km_pooling <- function(x = NULL,
   # Important: the all = parameter needs to be set to FALSE
   # since otherwise unmatched patients or those with zero weight
   # will be included, too!
-  object_list <- MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)
+  object_list <- MatchThem::complete(
+    x,
+    action = "all",
+    all = FALSE,
+    include = FALSE
+  )
 
   # now apply the compute_km function across all imputed and matched/weighted datasets
   # this creates a list with computed survival probabilities
   survival_fit_list <- lapply(object_list, FUN = compute_km)
-
 
   # pool survival probabilities ---------------------------------------------
 
@@ -240,24 +314,22 @@ km_pooling <- function(x = NULL,
   # that is, the function cloglog performs the
   # transformations on all survival probabilities
   # stored in survival_fit_list
-  cloglog <- function(i){
-
+  cloglog <- function(i) {
     # tidy up
     survival_times_df <- ggsurvfit::tidy_survfit(
       x = i,
       times = times,
       type = "survival"
-      ) |>
+    ) |>
       dplyr::mutate(
         # compute transformed qbar
-        q = log(-log(1-estimate)), # will be Inf for estimate = 1
+        q = log(-log(1 - estimate)), # will be Inf for estimate = 1
         # compute transformed U
-        u = std.error^2 / ((1-estimate) * log(1-estimate))^2
-        )
+        u = std.error^2 / ((1 - estimate) * log(1 - estimate))^2
+      )
 
     return(survival_times_df)
-
-    }
+  }
 
   # we apply this function to all fitted survival curves
   km_survival <- lapply(survival_fit_list, FUN = cloglog) |>
@@ -275,26 +347,26 @@ km_pooling <- function(x = NULL,
     dplyr::summarize(
       data.frame(mice::pool.scalar(Q = q, U = u, k = 1)[c("m", "qbar", "t")]),
       .groups = "drop"
-      ) |>
+    ) |>
 
     # we back-transform back and compute CI's
     dplyr::mutate(
-      surv = 1-exp(-exp(qbar)),
+      surv = 1 - exp(-exp(qbar)),
       se = sqrt(t),
-      lower = 1-exp(-exp(qbar - 1.96*se)),
-      upper = 1-exp(-exp(qbar + 1.96*se))
-      ) |>
+      lower = 1 - exp(-exp(qbar - 1.96 * se)),
+      upper = 1 - exp(-exp(qbar + 1.96 * se))
+    ) |>
 
     # confidence intervals are both 1 for time = 0 and surv = 1
     dplyr::mutate(
       lower = dplyr::if_else(time == 0 & surv == 1, 1.0, lower),
       upper = dplyr::if_else(time == 0 & surv == 1, 1.0, upper)
-      ) |>
+    ) |>
     # confidence intervals are both 0 for surv = 0
     dplyr::mutate(
       lower = dplyr::if_else(surv == 0, 0, lower),
       upper = dplyr::if_else(surv == 0, 0, upper)
-      ) |>
+    ) |>
 
     # arrange by strata, time and descending survival probability
     dplyr::arrange(strata, time, dplyr::desc(surv))
@@ -304,18 +376,26 @@ km_pooling <- function(x = NULL,
   # plot pooled Kaplan-Meier curve based on pooled survival probabilities
 
   km_plot <- km_survival |>
-    ggplot2::ggplot(ggplot2::aes(x = time, y = surv, color = strata, fill = strata)) +
+    ggplot2::ggplot(ggplot2::aes(
+      x = time,
+      y = surv,
+      color = strata,
+      fill = strata
+    )) +
     ggplot2::geom_step(linewidth = 1.25) +
-    ggplot2::geom_ribbon(ggplot2::aes(ymin = lower, ymax = upper), linetype = 0, alpha = 0.2) +
+    ggplot2::geom_ribbon(
+      ggplot2::aes(ymin = lower, ymax = upper),
+      linetype = 0,
+      alpha = 0.2
+    ) +
     ggplot2::theme_minimal(base_size = 14) +
     ggplot2::labs(
       x = "Follow-up time",
       y = "Pr(Survival) [%]",
       color = "Exposure",
       fill = "Exposure"
-      ) +
+    ) +
     ggplot2::theme(legend.position = "top")
-
 
   # Extract median survival time --------------------------------------------
 
@@ -339,22 +419,24 @@ km_pooling <- function(x = NULL,
   # Nuisance 3: if no y's are <=.5, then we should return NA
   # Nuisance 4: the obs (or many) after the .5 may be censored, giving
   #   a stretch of values = .5 +- epsilon
-  minmin <- function(y, x){
-    tolerance <- .Machine$double.eps^.5   #same as used in all.equal()
-    keep <- (!is.na(y) & y <(.5 + tolerance))
-    if (!any(keep)) NA
-    else {
+  minmin <- function(y, x) {
+    tolerance <- .Machine$double.eps^.5 #same as used in all.equal()
+    keep <- (!is.na(y) & y < (.5 + tolerance))
+    if (!any(keep)) {
+      NA
+    } else {
       x <- x[keep]
       y <- y[keep]
-      if (abs(y[1]-.5) <tolerance  && any(y< y[1]))
-        (x[1] + x[min(which(y<y[1]))])/2
-      else x[1]
+      if (abs(y[1] - .5) < tolerance && any(y < y[1])) {
+        (x[1] + x[min(which(y < y[1]))]) / 2
+      } else {
+        x[1]
+      }
     }
   }
 
   # apply this across strata listed in the km_survival table
-  minmin_strata <- function(i){
-
+  minmin_strata <- function(i) {
     km_survival_stratum <- km_survival |>
       dplyr::filter(strata == i)
 
@@ -365,17 +447,20 @@ km_pooling <- function(x = NULL,
     # = time when lower and upper
     # 95% confidence intervals of the survival
     # probability drop below .5
-    if(!is.null(km_survival_stratum$upper)){
-      upper <- minmin(y = km_survival_stratum$upper, x = km_survival_stratum$time)
-      lower <- minmin(y = km_survival_stratum$lower, x = km_survival_stratum$time)
+    if (!is.null(km_survival_stratum$upper)) {
+      upper <- minmin(
+        y = km_survival_stratum$upper,
+        x = km_survival_stratum$time
+      )
+      lower <- minmin(
+        y = km_survival_stratum$lower,
+        x = km_survival_stratum$time
+      )
       minmin_strata_return <- c(med, lower, upper)
-
-    }else{
-
+    } else {
       # Therneau assigns a 0 if no confidence intervals are available
       upper <- 0
       lower <- 0
-
     }
 
     # provide output table
@@ -384,14 +469,15 @@ km_pooling <- function(x = NULL,
       t_median = med, # median survival time
       t_lower = lower, # lower 95% CI of median survival time
       t_upper = upper # upper 95% CI of median survival time
-      )
+    )
 
     return(minmin_strata_return_tibble)
-
   }
 
-  km_median_survival <- do.call(rbind, lapply(X = unique(km_survival$strata), FUN = minmin_strata))
-
+  km_median_survival <- do.call(
+    rbind,
+    lapply(X = unique(km_survival$strata), FUN = minmin_strata)
+  )
 
   # return results ----------------------------------------------------------
 
@@ -400,8 +486,6 @@ km_pooling <- function(x = NULL,
       km_median_survival = km_median_survival,
       km_plot = km_plot,
       km_survival_table = km_survival
-      )
     )
-
-
+  )
 }
