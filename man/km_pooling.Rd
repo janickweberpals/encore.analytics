@@ -12,8 +12,8 @@ km_pooling(
 )
 }
 \arguments{
-\item{x}{imputed and matched (mimids) or weighted (wimids) object, imputed (mids) object
-or list of data frames (e.g., output of \code{\link{raking_weights}}), see details}
+\item{x}{list of data frames (one per imputed dataset, e.g., output of \code{\link{raking_weights}}),
+or an imputed and matched (mimids) or weighted (wimids) object, see details}
 
 \item{surv_formula}{specification of survival model formula to be fitted}
 
@@ -22,11 +22,12 @@ If NULL (default), survival probabilities are estimated and pooled across all ob
 
 \item{...}{additional arguments passed on to the per-imputation
 \code{\link[ggsurvfit]{survfit2}} call (and onwards to \code{\link[survival]{survfit}}),
-e.g. \code{type = "fleming-harrington"}.
-The arguments \code{formula}, \code{data}, \code{weights}, \code{cluster} and \code{robust}
-are set internally by \code{km_pooling()} and will throw an error if supplied here.
-Note that \code{...} only affects the underlying Kaplan-Meier fit of each imputed and
-matched/weighted dataset; the complementary log-log transformation, Rubin's rule pooling and
+e.g. \code{weights = weights}, \code{cluster = subclass}, \code{robust = TRUE} or
+\code{type = "fleming-harrington"}. Column names are resolved in each dataset.
+The arguments \code{formula} and \code{data} are set internally by \code{km_pooling()}
+and will throw an error if supplied here.
+Note that \code{...} only affects the underlying Kaplan-Meier fit of each imputed
+dataset; the complementary log-log transformation, Rubin's rule pooling and
 confidence interval computation are unaffected.}
 }
 \value{
@@ -60,32 +61,31 @@ and outputs corresponding Kaplan-Meier curve across imputed and
 matched/weighted datasets
 }
 \details{
-The function accepts (\code{x}):
-\itemize{
-\item an object of class mimids or wimids, which is the output of a workflow that requires
-imputing multiple (m) datasets using mice or amelia and matching or weighting each
-imputed dataset via the MatchThem package (see examples). Matched/weighted
-observations only are used.
-\item an object of class mids (e.g., from \code{\link[mice]{mice}}), in which case an
-unweighted Kaplan-Meier estimate is computed in each imputed dataset.
-\item a list of data frames (e.g., the output of \code{\link{raking_weights}}), analogous to the
-input of \code{\link{cox_pooling}}. Weights and cluster membership are picked up by column name:
-if the data frames contain a \code{weights} column, it is used as case weights with robust
-variance estimates. If they additionally contain a \code{subclass} column (matching), it is used
-as cluster variable. Otherwise, an unweighted Kaplan-Meier estimate is computed. These columns
-need to be present in all or none of the data frames.
-}
+The function takes a list of data frames (\code{x}), one per imputed dataset, analogous to the
+input of \code{\link{cox_pooling}}, e.g., the output of \code{\link{raking_weights}}. Case weights,
+cluster membership etc. are passed explicitly to the underlying \code{\link[survival]{survfit}}
+call via the dotted argument, for example \code{weights = weights, robust = TRUE} for weighted data or
+\code{weights = weights, cluster = subclass, robust = TRUE} for matched data. Without such arguments,
+an unweighted Kaplan-Meier estimate is computed.
+
+For backwards compatibility, \code{x} can also be an object of class mimids or wimids, which is the
+output of a workflow that requires imputing multiple (m) datasets using mice or amelia and matching
+or weighting each imputed dataset via the MatchThem package (see examples). These are converted
+internally to a list of the matched/weighted datasets and the arguments above are set automatically
+(\code{weights} and \code{robust = TRUE} for wimids, additionally \code{cluster = subclass} for mimids).
+Arguments supplied via the dotted argument take precedence over these defaults.
 
 \strong{Note for lists of data frames}: each data frame needs to already contain only the
 observations to be analyzed. When building the list from a mimids or wimids object, use
 \code{MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)}; otherwise unmatched
-patients or those with zero weight are included in the Kaplan-Meier fit.
+patients or those with zero weight are included in the Kaplan-Meier fit. To get an unweighted
+estimate from a mids object, use \code{mice::complete(x, action = "all", include = FALSE)}.
 
 The function fits the pre-specified survfit model (\code{surv_formula}, \code{\link[survival]{survfit}} package)
 to compute survival probabilities at each individual time point according to the Kaplan-Meier method.
 Survival probabilities can be estimated at all observed event times (default) or at user-specified time points
 using the \code{times} argument, which is passed directly to \code{\link[ggsurvfit]{tidy_survfit}}.
-For matched and weighted datasets, weights, cluster membership (matching only) and robust
+For mimids and wimids objects, weights, cluster membership (matching only) and robust
 variance estimates are considered in the \code{\link[survival]{survfit}} call by default.
 
 Since survival probabilities typically don't follow normal distributions,
@@ -158,13 +158,16 @@ More references:
  library(encore.analytics)
  library(mice)
  library(MatchThem)
+ library(dplyr)
 
- # simulate a cohort with 1,000 patients with 20\% missing data
+ # simulate a cohort with 500 patients with 20\% missing data
  data <- simulate_data(
    n = 500,
    imposeNA = TRUE,
    propNA = 0.2
-   )
+   ) |>
+   # anesrake (used for raking weights below) works best with factor variables
+   mutate(c_smoking_history = factor(ifelse(c_smoking_history == TRUE, "Current/former", "Never")))
 
  # impute the data
  set.seed(42)
@@ -182,13 +185,20 @@ More references:
    estimand = "ATO"
    )
 
+ # extract the list of imputed and weighted datasets
+ # (all = FALSE excludes observations with zero weight)
+ datasets <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+
  # fit a survival model
  km_fit <- as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
 
- # estimate and pool median survival times and Kaplan-Meier curve
+ # estimate and pool median survival times and Kaplan-Meier curve;
+ # weights are passed explicitly via `...` to the survfit2() call
  km_out <- km_pooling(
-   x = wimids,
-   surv_formula = km_fit
+   x = datasets,
+   surv_formula = km_fit,
+   weights = weights,
+   robust = TRUE
    )
 
  # median survival time
@@ -197,17 +207,27 @@ More references:
  # KM curve
  km_out$km_plot
 
- # unweighted Kaplan-Meier curve directly from the imputed (mids) object
- km_out_mids <- km_pooling(
-   x = mids,
-   surv_formula = km_fit
+ # for matched datasets (matchthem()), additionally pass the matched
+ # sets as cluster variable:
+ # km_pooling(x = datasets, surv_formula = km_fit,
+ #            weights = weights, cluster = subclass, robust = TRUE)
+
+ # a list of data frames can also come from other steps, e.g., raking weights
+ # to match a target population distribution
+ targets <- list(c_smoking_history = c("Current/former" = .35, "Never" = .65))
+ raked <- raking_weights(x = wimids, targets = targets)
+
+ km_out_raked <- km_pooling(
+   x = raked,
+   surv_formula = km_fit,
+   weights = weights,
+   robust = TRUE
    )
 
- # alternatively, a list of (e.g., weighted) data frames can be passed:
- # here, the completed, weighted datasets of the wimids object
- datasets <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
- km_out_list <- km_pooling(
-   x = datasets,
+ # without weights, an unweighted Kaplan-Meier estimate is computed
+ # (e.g., directly on the imputed datasets)
+ km_out_unweighted <- km_pooling(
+   x = mice::complete(mids, action = "all", include = FALSE),
    surv_formula = km_fit
    )
 
@@ -219,8 +239,9 @@ More references:
  # each row as its own independent cluster (relevant if a patient can
  # contribute more than one row, e.g. with time-varying covariates).
  km_out_id <- km_pooling(
-   x = wimids,
+   x = datasets,
    surv_formula = km_fit,
+   weights = weights,
    id = patientid
    )
 
