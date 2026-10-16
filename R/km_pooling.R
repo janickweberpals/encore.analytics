@@ -6,17 +6,23 @@
 #' matched/weighted datasets
 #'
 #' @details
-#' The function requires an object of class mimids or wimids (\code{x}), which is the output
-#' of a workflow that requires imputing multiple (m) datasets using mice or amelia
-#' and matching or weighting each imputed dataset via the MatchThem package
-#' (see examples).
+#' The function takes the imputed datasets (\code{x}) as a list of data frames, or as a
+#' mimids, wimids or mids object (see the sections "Input types and default model arguments" and
+#' "Precedence of arguments in ..." below). The latter are the output of a workflow that requires
+#' imputing multiple (m) datasets using mice or amelia and matching or weighting each imputed dataset
+#' via the MatchThem package (see examples). Weights and clusters of lists of data frames are specified
+#' explicitly via \code{...}, e.g., \code{weights = weights, cluster = subclass}.
 #'
 #' The function fits the pre-specified survfit model (\code{surv_formula}, \code{\link[survival]{survfit}} package)
 #' to compute survival probabilities at each individual time point according to the Kaplan-Meier method.
 #' Survival probabilities can be estimated at all observed event times (default) or at user-specified time points
 #' using the \code{times} argument, which is passed directly to \code{\link[ggsurvfit]{tidy_survfit}}.
-#' For matched and weighted datasets, weights, cluster membership (matching only) and robust
-#' variance estimates are considered in the \code{\link[survival]{survfit}} call by default.
+#' Arguments of the \code{\link[survival]{survfit}} call can be supplied via \code{...},
+#' e.g. \code{type = "fleming-harrington"}. For matched and weighted datasets (mimids and wimids objects),
+#' weights, cluster membership (matching only) and robust variance estimates are considered
+#' by default. \code{...} only affects the underlying Kaplan-Meier fit of each imputed dataset;
+#' the complementary log-log transformation, Rubin's rule pooling and confidence interval
+#' computation are unaffected.
 #'
 #' Since survival probabilities typically don't follow normal distributions,
 #' these need to be transformed to approximate normality first before pooling
@@ -81,18 +87,14 @@
 #' @seealso
 #' \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}
 #'
-#' @param x imputed and matched (mimids) or weighted (wimids) object
+#' @inheritParams pooling_inputs
 #' @param surv_formula specification of survival model formula to be fitted
 #' @param times numeric vector of follow-up time points at which survival probabilities are to be estimated (propagated to \code{\link[ggsurvfit]{tidy_survfit}}).
 #' If NULL (default), survival probabilities are estimated and pooled across all observed event times.
-#' @param ... additional arguments passed on to the per-imputation
-#' \code{\link[ggsurvfit]{survfit2}} call (and onwards to \code{\link[survival]{survfit}}),
-#' e.g. \code{type = "fleming-harrington"}.
-#' The arguments \code{formula}, \code{data}, \code{weights}, \code{cluster} and \code{robust}
-#' are set internally by \code{km_pooling()} and will throw an error if supplied here.
-#' Note that \code{...} only affects the underlying Kaplan-Meier fit of each imputed and
-#' matched/weighted dataset; the complementary log-log transformation, Rubin's rule pooling and
-#' confidence interval computation are unaffected.
+#'
+#' @inheritSection pooling_inputs Input types and default model arguments
+#' @inheritSection pooling_inputs Precedence of arguments in \code{...}
+#' @inheritSection pooling_inputs Transparency
 #'
 #' @return list with pooled median survival estimate and pooled Kaplan-Meier curve
 #' \code{km_median_survival}:
@@ -123,7 +125,7 @@
 #'  library(mice)
 #'  library(MatchThem)
 #'
-#'  # simulate a cohort with 1,000 patients with 20% missing data
+#'  # simulate a cohort with 500 patients with 20% missing data
 #'  data <- simulate_data(
 #'    n = 500,
 #'    imposeNA = TRUE,
@@ -149,7 +151,8 @@
 #'  # fit a survival model
 #'  km_fit <- as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
 #'
-#'  # estimate and pool median survival times and Kaplan-Meier curve
+#'  # 1) weighted (wimids) or matched (mimids) object:
+#'  # weights (and clusters) are set automatically
 #'  km_out <- km_pooling(
 #'    x = wimids,
 #'    surv_formula = km_fit
@@ -161,9 +164,34 @@
 #'  # KM curve
 #'  km_out$km_plot
 #'
-#'  # pass additional arguments to the underlying survfit2() call:
-#'  # pass a column-based NSE argument (e.g. id = patientid) through `...`;
-#'  # patientid is resolved as a column of each imputed/weighted dataset.
+#'  # 2) list of data frames: weights are specified explicitly via `...`
+#'  # (all = FALSE excludes observations with zero weight)
+#'  datasets <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+#'  km_out_list <- km_pooling(
+#'    x = datasets,
+#'    surv_formula = km_fit,
+#'    weights = weights
+#'    )
+#'
+#'  # for matched datasets, additionally specify the matched sets as clusters:
+#'  # km_pooling(x = datasets, surv_formula = km_fit, weights = weights, cluster = subclass)
+#'
+#'  # weights stored in a column with another name, e.g., `w`
+#'  datasets_w <- lapply(datasets, function(d) dplyr::rename(d, w = weights))
+#'  km_out_w <- km_pooling(
+#'    x = datasets_w,
+#'    surv_formula = km_fit,
+#'    weights = w
+#'    )
+#'
+#'  # 3) imputed (mids) object: unweighted Kaplan-Meier curve
+#'  km_out_mids <- km_pooling(
+#'    x = mids,
+#'    surv_formula = km_fit
+#'    )
+#'
+#'  # 4) pass additional arguments to the underlying survfit2() call:
+#'  # column names are resolved in each imputed dataset, e.g. `id = patientid`.
 #'  # survfit() uses `id` as the subject identifier for its robust/sandwich
 #'  # variance calculation, clustering rows by patient instead of treating
 #'  # each row as its own independent cluster (relevant if a patient can
@@ -184,28 +212,16 @@ km_pooling <- function(
 ) {
   # input checks ------------------------------------------------------------
 
-  # check if x is a mimids or wimids object
-  assertthat::assert_that(
-    inherits(x, c("mimids", "wimids")),
-    msg = "<x> needs to be a mimids or wimids object"
-  )
   # check if surv_formula is a formula
   assertthat::assert_that(
     inherits(surv_formula, "formula"),
     msg = "<surv_formula> needs to be a formula"
   )
-  # check weights and subclass
-  assertthat::assert_that(
-    "weights" %in% names(MatchThem::complete(x)),
-    msg = "<x> needs to contain a weights column"
-  )
-  # check if weights and subclass are in the data
-  if (inherits(x, "mimids")) {
-    assertthat::assert_that(
-      "subclass" %in% names(MatchThem::complete(x)),
-      msg = "<x> needs to contain a weights column"
-    )
-  }
+
+  # bring the input into the form of a list of datasets plus the default
+  # model arguments of the input type (weights, cluster, ...)
+  input <- prepare_pooling_input(x)
+
   if (!is.null(times)) {
     assertthat::assert_that(
       is.numeric(times),
@@ -219,7 +235,7 @@ km_pooling <- function(
   # data further down rather than as objects that exist here)
   reserved_dots <- intersect(
     ...names(),
-    c("formula", "data", "weights", "cluster", "robust")
+    c("formula", "data")
   )
   assertthat::assert_that(
     length(reserved_dots) == 0,
@@ -232,74 +248,22 @@ km_pooling <- function(
   # capture the *unevaluated* expressions behind `...` (e.g. list(id = patientid)
   # becomes list(id = quote(patientid))). This must not be `list(...)`: some
   # arguments (like `id`) are column names meant to be resolved against
-  # `data = i` inside survfit(), not objects that exist in this environment,
+  # `data = d` inside survfit(), not objects that exist in this environment,
   # and `list(...)` would force and fail on them immediately.
-  extra_args <- as.list(substitute(list(...)))[-1]
+  user_args <- as.list(substitute(list(...)))[-1]
 
   # Fit Kaplan Meier --------------------------------------------------------
 
-  # first, we fit a survival function for ith dataset
-  #
-  # The survfit2() call is built with as.call()/eval() rather than written
-  # literally with a trailing `...`. ggsurvfit::survfit2() reconstructs its
-  # call internally (match.call(expand.dots = TRUE)) to dispatch to
-  # survival::survfit(); if `...` is spliced in literally at this call site,
-  # that reconstruction degrades NSE arguments like `id` into positional
-  # `..1`-style placeholders that no longer resolve once survfit() tries to
-  # evaluate them as columns of `data = i`. Building the call explicitly with
-  # `formula`/`data`/`weights`/`cluster` kept as plain symbols (resolved by
-  # survfit() against `data = i`, exactly like a literal call would) and
-  # `extra_args` spliced in by value avoids that.
-  compute_km <- function(i) {
-    # compute the survival function for dataset i
-
-    ## for weighting
-    if (inherits(x, "wimids")) {
-      base_args <- list(
-        formula = quote(surv_formula),
-        weights = quote(weights),
-        robust = TRUE,
-        data = quote(i)
-      )
-    }
-
-    ## for matching
-    if (inherits(x, "mimids")) {
-      base_args <- list(
-        formula = quote(surv_formula),
-        weights = quote(weights),
-        cluster = quote(subclass),
-        robust = TRUE,
-        data = quote(i)
-      )
-    }
-
-    call_expr <- as.call(c(quote(ggsurvfit::survfit2), base_args, extra_args))
-    survfit_fit <- eval(call_expr, envir = environment())
-
-    return(survfit_fit)
-  }
-
-  # compute KM across all imputed (and weighted/matched) datasets --------------------
-
-  # next, we create a list of datasets to apply the compute_km function to
-  # action = "all"  : produces a mild object (list) of the multiply imputed datasets
-  # all = FALSE     : do NOT include observations with a zero estimated weight
-  # include = FALSE : do NOT include original data with the missing values
-
-  # Important: the all = parameter needs to be set to FALSE
-  # since otherwise unmatched patients or those with zero weight
-  # will be included, too!
-  object_list <- MatchThem::complete(
-    x,
-    action = "all",
-    all = FALSE,
-    include = FALSE
-  )
-
-  # now apply the compute_km function across all imputed and matched/weighted datasets
-  # this creates a list with computed survival probabilities
-  survival_fit_list <- lapply(object_list, FUN = compute_km)
+  # fit a survival function in each imputed (and weighted/matched) dataset;
+  # merging of default and user arguments, checks, the console message and the
+  # construction of the survfit2() call are handled in fit_models()
+  survival_fit_list <- fit_models(
+    input = input,
+    fit_fun = quote(ggsurvfit::survfit2),
+    model_label = "Kaplan-Meier survival function",
+    formula = surv_formula,
+    user_args = user_args
+  )$fits
 
   # pool survival probabilities ---------------------------------------------
 

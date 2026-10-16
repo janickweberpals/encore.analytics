@@ -49,7 +49,8 @@ test_that("wimids and cox pooling workflows lead to the same result", {
   # fit and pool Cox proportional hazards model results
   cox_pooling_workflow_results <- cox_pooling(
     x = wimids_list,
-    surv_formula = Surv(fu_itt_months, death_itt) ~ treat
+    surv_formula = Surv(fu_itt_months, death_itt) ~ treat,
+    weights = weights
     )
 
   expect_equal(wimids_workflow_results$estimate, cox_pooling_workflow_results$estimate)
@@ -62,14 +63,13 @@ test_that("cox_pooling handles invalid inputs appropriately", {
   # Test with non-list input
   expect_error(
     cox_pooling(x = data.frame()),
-    "<cox_results_list> needs to be a list or mild object"
+    "<x> needs to be a mimids, wimids or mids object or a list of data frames"
   )
 
-  # Test with missing weights column
-  data_no_weights <- list(data.frame(x = 1))
+  # Test with an empty list
   expect_error(
-    cox_pooling(x = data_no_weights),
-    "<weights> not in <x>"
+    cox_pooling(x = list()),
+    "non-empty list of data frames"
   )
 
   # Test with invalid formula
@@ -77,6 +77,13 @@ test_that("cox_pooling handles invalid inputs appropriately", {
   expect_error(
     cox_pooling(x = data_with_weights, surv_formula = "not_a_formula"),
     "<surv_formula> needs to be a formula"
+  )
+
+  # formula and data are set internally
+  wimids_list <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+  expect_error(
+    cox_pooling(x = wimids_list, surv_formula = km_fit, data = NULL),
+    "set internally by cox_pooling"
   )
 })
 
@@ -88,8 +95,8 @@ test_that("cox_pooling works with different formula specifications using wimids"
   formula1 <- Surv(fu_itt_months, death_itt) ~ treat
   formula2 <- Surv(fu_itt_months, death_itt) ~ treat + dem_age_index_cont
   
-  result1 <- cox_pooling(wimids_list, surv_formula = formula1)
-  result2 <- cox_pooling(wimids_list, surv_formula = formula2)
+  result1 <- cox_pooling(wimids_list, surv_formula = formula1, weights = weights)
+  result2 <- cox_pooling(wimids_list, surv_formula = formula2, weights = weights)
   
   # Check structure and content
   expect_s3_class(result1, "data.frame")
@@ -105,7 +112,9 @@ test_that("cox_pooling works with matched data from mimids", {
   # Test basic survival model
   result <- cox_pooling(
     x = matched_list,
-    surv_formula = km_fit
+    surv_formula = km_fit,
+    weights = weights,
+    cluster = subclass
   )
   
   # Check structure and content
@@ -130,7 +139,9 @@ test_that("cox_pooling results are consistent with manual calculations", {
   # Cox pooling result
   pooled_result <- cox_pooling(
     x = matched_list,
-    surv_formula = km_fit
+    surv_formula = km_fit,
+    weights = weights,
+    cluster = subclass
   )
   
   # The pooled estimate should be in the range of individual estimates
@@ -145,7 +156,8 @@ test_that("cox_pooling handles interaction terms correctly", {
   
   result <- cox_pooling(
     x = wimids_list,
-    surv_formula = formula_interaction
+    surv_formula = formula_interaction,
+    weights = weights
   )
   
   # Check if interaction term is present
@@ -153,3 +165,74 @@ test_that("cox_pooling handles interaction terms correctly", {
   expect_true(any(grepl(":", result$term)))
 })
 
+test_that("cox_pooling on wimids/mimids objects equals the equivalent call on a list of data frames", {
+  # wimids: weights are set automatically
+  wimids_list <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+  expect_equal(
+    cox_pooling(x = wimids, surv_formula = km_fit),
+    cox_pooling(x = wimids_list, surv_formula = km_fit, weights = weights)
+  )
+
+  # mimids: weights and the matched sets as cluster are set automatically
+  mimids_list <- MatchThem::complete(mimids, action = "all", all = FALSE, include = FALSE)
+  expect_equal(
+    cox_pooling(x = mimids, surv_formula = km_fit),
+    cox_pooling(x = mimids_list, surv_formula = km_fit, weights = weights, cluster = subclass)
+  )
+})
+
+test_that("cox_pooling on a mids object is unweighted", {
+  mids_list <- mice::complete(mids, action = "all", include = FALSE)
+
+  expect_equal(
+    cox_pooling(x = mids, surv_formula = km_fit),
+    cox_pooling(x = mids_list, surv_formula = km_fit)
+  )
+
+  # differs from the weighted result
+  wimids_list <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+  expect_false(isTRUE(all.equal(
+    cox_pooling(x = mids, surv_formula = km_fit)$estimate,
+    cox_pooling(x = wimids_list, surv_formula = km_fit, weights = weights)$estimate
+  )))
+})
+
+test_that("cox_pooling warns if weights and subclass columns are not used", {
+  matched_list <- MatchThem::complete(mimids, action = "all", all = FALSE, include = FALSE)
+
+  # BREAKING CHANGE (0.4.0): lists are no longer interpreted automatically
+  expect_warning(
+    cox_pooling(x = matched_list, surv_formula = km_fit),
+    "not used in the models"
+  )
+
+  # no warning if weights/cluster are specified, or deliberately set to NULL
+  expect_no_warning(cox_pooling(x = matched_list, surv_formula = km_fit, weights = weights, cluster = subclass))
+  expect_no_warning(cox_pooling(x = matched_list, surv_formula = km_fit, weights = NULL, cluster = NULL))
+})
+
+test_that("cox_pooling accepts weights stored in a column with another name", {
+  wimids_list <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+  renamed <- lapply(wimids_list, function(d) dplyr::rename(d, w = weights))
+
+  expect_equal(
+    cox_pooling(x = renamed, surv_formula = km_fit, weights = w),
+    cox_pooling(x = wimids_list, surv_formula = km_fit, weights = weights)
+  )
+
+  # a column that does not exist gives an informative error
+  expect_error(
+    cox_pooling(x = renamed, surv_formula = km_fit, weights = not_a_column),
+    "not_a_column"
+  )
+})
+
+test_that("cox_pooling arguments in ... take precedence over the defaults and are forwarded to coxph()", {
+  # cluster = NULL removes the default clustering on the matched sets
+  default <- cox_pooling(x = mimids, surv_formula = km_fit)
+  no_cluster <- cox_pooling(x = mimids, surv_formula = km_fit, cluster = NULL)
+  expect_false(isTRUE(all.equal(default$std.error, no_cluster$std.error)))
+
+  # additional coxph() arguments are accepted
+  expect_s3_class(cox_pooling(x = wimids, surv_formula = km_fit, ties = "breslow"), "data.frame")
+})

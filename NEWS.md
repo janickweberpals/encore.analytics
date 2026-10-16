@@ -1,3 +1,20 @@
+# encore.analytics 0.4.0
+
+## Breaking changes
+
+* **BREAKING CHANGE:** `cox_pooling()` no longer applies the `weights` and `subclass` columns of a supplied list of data frames automatically, and no longer raises an error if there is no `weights` column. Weights and clusters must now be specified explicitly, aligned with the new `km_pooling()` behavior for lists. Update existing calls such as `cox_pooling(x, formula)` to `cox_pooling(x, formula, weights = weights)` (weighted data) or `cox_pooling(x, formula, weights = weights, cluster = subclass)` (matched data). Calls that are not updated now fit an **unweighted** model and raise a warning that names the unused `weights`/`subclass` columns and the argument to add. Passing `mimids` or `wimids` objects is not affected
+
+## New features
+
+* `km_pooling()` and `cox_pooling()` now accept the same four types of input: weighted (`wimids`) and matched (`mimids`) objects, imputed (`mids`) objects (unweighted analysis), and lists of data frames, e.g., the output of `raking_weights()`. A new internal helper, `prepare_pooling_input()`, converts each input type into a list of datasets plus the default model arguments of that type (`weights` for `wimids`; `weights` and `cluster = subclass` for `mimids`; none for `mids` and lists), so that both functions share one code path
+* Arguments passed via `...` are now applied on top of, and take precedence over, the default arguments of the input type, e.g., `cluster = NULL` or `weights = w` for weights stored in a column named `w`. Only `formula` and `data` are reserved. This relaxes `km_pooling()`, which previously raised an error if `weights`, `cluster` or `robust` were supplied via `...`. `cox_pooling()` gains a `...` argument that forwards additional arguments to `survival::coxph()`, e.g., `ties = "breslow"`
+* `robust` is now derived instead of fixed: unless specified, `robust = TRUE` is used whenever weights, a cluster or an id are part of the model; this reproduces the previous behavior for `mimids`, `wimids` objects and weighted lists
+* Both functions now print a `cli` message that shows how the datasets were obtained (including the `MatchThem::complete(all = FALSE)` call) and exactly which model arguments are used and where each comes from (default for the input type, derived, or specified by the user). Use `suppressMessages()` to silence it
+* A warning is raised if the datasets contain a `weights` or `subclass` column that is not used because no `weights`/`cluster`/`id` argument was specified; specify `weights = NULL` or `cluster = NULL` to confirm that the columns should be ignored
+* Column names passed as `weights`, `cluster` or `id` are checked against the datasets and an informative error is raised if a column does not exist
+* The documentation of the input types, the default arguments and the argument precedence is shared by `km_pooling()` and `cox_pooling()` and was extended with examples for each input type
+* Added `cli` to `Imports`
+
 # encore.analytics 0.3.0
 
 * Added a `...` argument to `km_pooling()` that forwards additional arguments to the per-imputation `ggsurvfit::survfit2()` call (and onwards to `survival::survfit()`), e.g. `type = "fleming-harrington"`. Arguments that `km_pooling()` sets internally (`formula`, `data`, `weights`, `cluster`, `robust`) raise an informative error if supplied this way
