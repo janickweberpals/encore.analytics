@@ -1,9 +1,3 @@
-# encore.analytics 0.4.0
-
-* `km_pooling()` now works on a list of data frames (one per imputed dataset), e.g., the output of `raking_weights()`, analogous to `cox_pooling()`. Weights, cluster membership etc. are no longer applied automatically but are passed explicitly via `...` to the per-imputation `survfit2()` call (e.g. `weights = weights, robust = TRUE`, or additionally `cluster = subclass` for matched data); without them an unweighted Kaplan-Meier estimate is computed. As a consequence, `weights`, `cluster` and `robust` are no longer reserved in `...`; only `formula` and `data` still raise an error if supplied
-* Passing `mimids` or `wimids` objects to `km_pooling()` is deprecated. They are still supported for backwards compatibility and give the same results as before: they are converted internally by the new helper `as_dataset_list()`, which also sets the matching `weights`, `cluster` and `robust` arguments (which can be overridden via `...`). A `cli` notice, shown once per session, points to the list-based usage. Plain `mids` objects are not accepted; use `mice::complete(x, action = "all", include = FALSE)` first
-* Added `cli` to `Imports`
-
 # encore.analytics 0.3.0
 
 * Added a `...` argument to `km_pooling()` that forwards additional arguments to the per-imputation `ggsurvfit::survfit2()` call (and onwards to `survival::survfit()`), e.g. `type = "fleming-harrington"`. Arguments that `km_pooling()` sets internally (`formula`, `data`, `weights`, `cluster`, `robust`) raise an informative error if supplied this way

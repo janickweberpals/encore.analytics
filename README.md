@@ -123,5 +123,5 @@ like to change.
 If you use `encore.analytics` in your research, please cite it as:
 
     Weberpals J (2026). encore.analytics: Multiple Imputation and Propensity Score
-    Workflows for Oncology Trial Emulation. R package version 0.4.0.
+    Workflows for Oncology Trial Emulation. R package version 0.3.0.
     https://github.com/janickweberpals/encore.analytics
