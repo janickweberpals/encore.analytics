@@ -13,7 +13,7 @@ globalVariables(c(
   "conf.low",
 
   # km_pooling variables
-  "strata", "time", "u", "qbar", "se", "desc", "surv",
+  "strata", "time", "u", "ubar", "qbar", "se", "desc", "surv",
   "lower", "upper", "std.err", "estimate", "std.error",
 
   # raking_weights variables

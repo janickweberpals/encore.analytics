@@ -12,3 +12,4 @@ sticker
 ^pkgdown$
 ^README\.html$
 ^codecov\.yml$
+^\.claude$
