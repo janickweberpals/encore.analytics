@@ -31,20 +31,26 @@ The package implements various methodologies for:
 - Multiple imputation of missing data
 - Propensity score estimation and matching
 - Survival analysis with multiply imputed data
-- Agreement metrics for assessing consistency across imputed datasets
+- Agreement metrics for comparing randomized controlled trial (RCT) and
+  real-world evidence (RWE) emulation study results
 - Specialized visualization tools for survival outcomes
 
 ## Key Features
 
-- **Cox Model Pooling**: Implementation of various approaches for
-  pooling Cox proportional hazards models across multiply imputed
-  datasets
-- **Kaplan-Meier Pooling**: Tools for combining and visualizing
-  Kaplan-Meier curves from multiple imputations
+- **Cox Model Pooling**: Pooling of Cox proportional hazards models
+  across multiply imputed datasets; accepts weighted or matched
+  (`MatchThem`) objects, imputed (`mice`) objects, or lists of data
+  frames, e.g., with raking weights
+- **Kaplan-Meier Pooling**: Combining and visualizing Kaplan-Meier
+  curves from multiple imputations (Rubin’s rules after a complementary
+  log-log transformation, Morisot et al. 2015), with the same input
+  options
 - **Raking Weights**: Methods for calibrating weights in propensity
   score analyses
-- **Agreement Metrics**: Functions to assess consistency and agreement
-  across imputed datasets
+- **Agreement Metrics**: Functions to assess agreement between RCT and
+  RWE emulation study results, with configurable metrics, aggregate
+  agreement summaries, and transforms (log, logit, log-log) for
+  different effect-size scales
 - **Table 1 Generation**: Utilities for creating descriptive statistics
   tables
 - **Data Simulation**: Tools for generating synthetic datasets for
@@ -56,6 +62,7 @@ You can install the development version of encore.analytics from
 [GitHub](https://github.com/) with:
 
 ``` r
+
 # install.packages("pak")
 pak::pak("janickweberpals/encore.analytics")
 ```
@@ -76,8 +83,8 @@ The documentation includes:
     survival analyses with multiple imputations
 3.  **Raking Weights**: Implementation of weight calibration methods
 4.  **Kaplan-Meier Pooling**: Techniques for combining survival curves
-5.  **Agreement Metrics**: Methods for assessing consistency across
-    imputations
+5.  **Agreement Metrics**: Methods for assessing agreement between RCT
+    and RWE emulation study results
 
 ## Implementation Details
 
@@ -110,8 +117,8 @@ like to change.
 If you use `encore.analytics` in your research, please cite it as:
 
 ``` R
-Weberpals J (2025). encore.analytics: Multiple Imputation and Propensity Score 
-Workflows for Oncology Trial Emulation. R package version 0.1.0.
+Weberpals J (2026). encore.analytics: Multiple Imputation and Propensity Score
+Workflows for Oncology Trial Emulation. R package version 0.4.0.
 https://github.com/janickweberpals/encore.analytics
 ```
 

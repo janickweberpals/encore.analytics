@@ -645,11 +645,14 @@ and real-world evidence (RWE) emulation study results</li>
 </ul>
 <h2 id="key-features">Key Features</h2>
 <ul>
-<li><strong>Cox Model Pooling</strong>: Implementation of various
-approaches for pooling Cox proportional hazards models across multiply
-imputed datasets</li>
-<li><strong>Kaplan-Meier Pooling</strong>: Tools for combining and
-visualizing Kaplan-Meier curves from multiple imputations</li>
+<li><strong>Cox Model Pooling</strong>: Pooling of Cox proportional
+hazards models across multiply imputed datasets; accepts weighted or
+matched (<code>MatchThem</code>) objects, imputed (<code>mice</code>)
+objects, or lists of data frames, e.g., with raking weights</li>
+<li><strong>Kaplan-Meier Pooling</strong>: Combining and visualizing
+Kaplan-Meier curves from multiple imputations (Rubin’s rules after a
+complementary log-log transformation, Morisot et al. 2015), with the
+same input options</li>
 <li><strong>Raking Weights</strong>: Methods for calibrating weights in
 propensity score analyses</li>
 <li><strong>Agreement Metrics</strong>: Functions to assess agreement
@@ -710,7 +713,7 @@ like to change.</p>
 <p>If you use <code>encore.analytics</code> in your research, please
 cite it as:</p>
 <pre><code>Weberpals J (2026). encore.analytics: Multiple Imputation and Propensity Score
-Workflows for Oncology Trial Emulation. R package version 0.3.0.
+Workflows for Oncology Trial Emulation. R package version 0.4.0.
 https://github.com/janickweberpals/encore.analytics</code></pre>
 
 </body>

@@ -12,21 +12,28 @@ km_pooling(
 )
 }
 \arguments{
-\item{x}{imputed and matched (mimids) or weighted (wimids) object}
+\item{x}{The imputed datasets to analyze. One of:
+\itemize{
+\item a list of data frames (one per imputed dataset), e.g., the output of
+\code{\link{raking_weights}} or of \code{MatchThem::complete(..., action = "all")}
+\item a weighted (\code{wimids}) or matched (\code{mimids}) object created with \pkg{MatchThem}
+\item an imputed (\code{mids}) object created with \pkg{mice}
+}
+
+See the section "Input types and default model arguments" for how each input is handled.}
 
 \item{surv_formula}{specification of survival model formula to be fitted}
 
 \item{times}{numeric vector of follow-up time points at which survival probabilities are to be estimated (propagated to \code{\link[ggsurvfit]{tidy_survfit}}).
 If NULL (default), survival probabilities are estimated and pooled across all observed event times.}
 
-\item{...}{additional arguments passed on to the per-imputation
-\code{\link[ggsurvfit]{survfit2}} call (and onwards to \code{\link[survival]{survfit}}),
-e.g. \code{type = "fleming-harrington"}.
-The arguments \code{formula}, \code{data}, \code{weights}, \code{cluster} and \code{robust}
-are set internally by \code{km_pooling()} and will throw an error if supplied here.
-Note that \code{...} only affects the underlying Kaplan-Meier fit of each imputed and
-matched/weighted dataset; the complementary log-log transformation, Rubin's rule pooling and
-confidence interval computation are unaffected.}
+\item{...}{Additional arguments passed on to the per-dataset model call
+(\code{\link[ggsurvfit]{survfit2}} for \code{km_pooling()}, \code{\link[survival]{coxph}} for
+\code{cox_pooling()}). They are used in addition to, and take precedence over, the default
+arguments of the input type (see the section "Input types and default model arguments").
+Only \code{formula} and \code{data} are set internally and cannot be supplied here.
+Column names are written without quotes and are looked up in each dataset, e.g.
+\code{weights = w} or \code{id = patientid}.}
 }
 \value{
 list with pooled median survival estimate and pooled Kaplan-Meier curve
@@ -43,7 +50,7 @@ list with pooled median survival estimate and pooled Kaplan-Meier curve
 \item strata = stratum
 \item time = observed time point
 \item m = number of imputed datasets
-\item qbar = pooled univariate estimate of the complementary log-log transformed survival probabilities, see formula (3.1.2) Rubin (1987)
+\item qbar = pooled univariate estimate of the complementary log-log transformed survival probabilities \eqn{\log(-\log(1 - S))}, see formula (3.1.2) Rubin (1987)
 \item t = total variance of the pooled univariate estimate of the complementary log-log transformed survival probabilities, formula (3.1.5) Rubin (1987)
 \item se = total standard error of the pooled estimate (derived as sqrt(t))
 \item surv = back-transformed pooled survival probability
@@ -59,28 +66,50 @@ and outputs corresponding Kaplan-Meier curve across imputed and
 matched/weighted datasets
 }
 \details{
-The function requires an object of class mimids or wimids (\code{x}), which is the output
-of a workflow that requires imputing multiple (m) datasets using mice or amelia
-and matching or weighting each imputed dataset via the MatchThem package
-(see examples).
+The function takes the imputed datasets (\code{x}) as a list of data frames, or as a
+mimids, wimids or mids object (see the sections "Input types and default model arguments" and
+"Precedence of arguments in ..." below). The latter are the output of a workflow that requires
+imputing multiple (m) datasets using mice or amelia and matching or weighting each imputed dataset
+via the MatchThem package (see examples). Weights and clusters of lists of data frames are specified
+explicitly via \code{...}, e.g., \code{weights = weights, cluster = subclass}.
 
 The function fits the pre-specified survfit model (\code{surv_formula}, \code{\link[survival]{survfit}} package)
 to compute survival probabilities at each individual time point according to the Kaplan-Meier method.
 Survival probabilities can be estimated at all observed event times (default) or at user-specified time points
 using the \code{times} argument, which is passed directly to \code{\link[ggsurvfit]{tidy_survfit}}.
-For matched and weighted datasets, weights, cluster membership (matching only) and robust
-variance estimates are considered in the \code{\link[survival]{survfit}} call by default.
+Arguments of the \code{\link[survival]{survfit}} call can be supplied via \code{...},
+e.g. \code{type = "fleming-harrington"}. For matched and weighted datasets (mimids and wimids objects),
+weights, cluster membership (matching only) and robust variance estimates are considered
+by default. \code{...} only affects the underlying Kaplan-Meier fit of each imputed dataset;
+the complementary log-log transformation, Rubin's rule pooling and confidence interval
+computation are unaffected.
 
 Since survival probabilities typically don't follow normal distributions,
 these need to be transformed to approximate normality first before pooling
-across imputed datasets and time points. To that end, survival probabilities are first
-transformed using a complementary log-log transformation (\code{log(-log(1-pr(surv)))})
-as recommended by multiple sources (Marshall, Billingham, and Bryan (2009)).
+across imputed datasets and time points. To that end, the method of Morisot et al. (2015) is
+implemented, who applied Rubin's rules after a complementary log-log transformation of the
+survival probabilities, following the recommendation of Marshall et al. (2009) to combine
+predicted survival probabilities after this transformation. In each imputed dataset
+\emph{i} and at each time point \emph{t}, the survival probability \eqn{S_i(t)} is transformed to
+\deqn{Q_i(t) = \log(-\log(1 - S_i(t)))}
+and the corresponding within-dataset variance is derived from the variance of the survival
+probability (the squared standard error reported by \code{\link[survival]{survfit}}) with the delta method:
+\deqn{U_i(t) = \frac{Var[S_i(t)]}{\left[(1 - S_i(t)) \log(1 - S_i(t))\right]^2}}
+
+Note that the complementary log-log transformation is applied to the survival probability
+\eqn{S} itself, as in Morisot et al. (2015). This is not the same transformation as the
+\eqn{\log(-\log(S))} used for the confidence intervals of \code{\link[survival]{survfit}}
+with \code{conf.type = "log-log"}. For a single dataset, the point estimates and standard errors
+therefore agree with \code{\link[survival]{survfit}}, but the confidence intervals differ slightly.
 
 To pool the transformed estimates across imputed datasets and time points, the \code{\link[mice]{pool.scalar}}
 function is used to apply Rubin's rule to combine pooled estimates (qbar) according to
 formula (3.1.2) Rubin (1987) and to compute the corresponding total variance (t) of the pooled
-estimate according to formula (3.1.5) Rubin (1987). When \code{times = NULL}, the pooling is performed
+estimate according to formula (3.1.5) Rubin (1987), i.e.,
+\eqn{T = \bar{U} + (1 + 1/m) B} with the average within-dataset variance \eqn{\bar{U}} and
+the between-dataset variance \eqn{B} (as in Morisot et al. (2015)). If only a single dataset is supplied (m = 1, e.g., complete
+data without imputation), the between-imputation variance is 0 by definition, the total variance equals the
+within-dataset variance and a warning is raised. When \code{times = NULL}, the pooling is performed
 at each unique combination of event times across all imputed datasets. When specific time points are provided
 via the \code{times} argument, pooling occurs only at those pre-specified time points, ensuring consistency
 across datasets and facilitating comparison at clinically relevant follow-up intervals.
@@ -96,7 +125,7 @@ Special scenarios during the transformation, pooling and backtransformation are
 considered. By convention, Kaplan-Meier survival curves start at time = 0 with survival probability = 1
 unless a delayed entry survival model is fitted (not supported yet). In the case that there is no
 observation in the data at at time = 0 with survival probability = 1, the \code{\link[ggsurvfit]{tidy_survfit}}
-extrapolates this across strata. For the complimentary log-log transformation this means, that survival probabilities = 1
+extrapolates this across strata. For the complementary log-log transformation this means, that survival probabilities = 1
 at time = 0 and corresponding confidence intervals are extrapolated to 1. If the survival proability reaches exactly 0,
 the survival probability and corresponding confidence intervals are set to 0 as well.
 
@@ -133,16 +162,69 @@ The function follows the following logic:
 More references:
 \itemize{
 \item https://stefvanbuuren.name/fimd/sec-pooling.html
-\item https://link.springer.com/article/10.1007/s10198-008-0129-y
-\item https://bmcmedresmethodol.biomedcentral.com/articles/10.1186/s12874-015-0048-4
 }
 }
+\section{Input types and default model arguments}{
+
+
+The datasets are first brought into the form of a list of data frames. Depending on the type of
+\code{x}, default model arguments are set:\tabular{llll}{
+   Input \code{x} \tab How the datasets are obtained \tab \code{weights} \tab \code{cluster} \cr
+   \code{wimids} \tab \code{MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)} \tab \code{weights} \tab none \cr
+   \code{mimids} \tab same as \code{wimids} \tab \code{weights} \tab \code{subclass} \cr
+   \code{mids} \tab \code{mice::complete(x, action = "all", include = FALSE)} \tab none (unweighted) \tab none \cr
+   list of data frames \tab used as supplied \tab none \tab none \cr
+}
+
+
+\strong{Lists of data frames are never interpreted automatically.} A list can come from many sources
+(weighting, matching, raking, your own code) so the function cannot know which columns are meant
+as weights or clusters. You state this explicitly through \code{...}, for example:
+\itemize{
+\item weighted data: \code{weights = weights}
+\item matched data: \code{weights = weights, cluster = subclass}
+\item weights stored in a column with another name: \code{weights = w}
+}
+
+If the datasets contain a column named \code{weights} or \code{subclass} that is not used
+because no \code{weights} or \code{cluster} (or \code{id}) argument was specified, a warning
+is raised that names the argument to add. Specify \code{weights = NULL} or \code{cluster = NULL}
+to confirm that the column should deliberately be ignored.
+
+\strong{Important}: when you build the list from a \code{mimids} or \code{wimids} object yourself,
+use \code{MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)}. With
+\code{all = TRUE}, unmatched patients and patients with zero weight are included in the models.
+}
+
+\section{Precedence of arguments in \code{...}}{
+
+
+Default arguments of the input type are applied first, then the arguments you supply via
+\code{...}. If both contain the same argument, \strong{your argument wins}. For example, for a
+\code{mimids} object \code{cluster = NULL} fits the model without clustering on the matched sets
+and \code{cluster = pair_id} clusters on another column. \code{formula} and \code{data} are the only
+reserved arguments.
+
+\code{robust} is set automatically: unless you specify it, \code{robust = TRUE} is used whenever
+weights, a cluster or an id are part of the model (the model-based variance is not valid in these
+cases), otherwise the default of the model function is kept. An explicitly supplied \code{robust}
+always takes precedence.
+}
+
+\section{Transparency}{
+
+
+Every call prints a message that lists how the datasets were obtained and exactly which
+arguments were used for the models, including where each argument comes from (default for the
+input type, derived, or specified by you). Use \code{suppressMessages()} to silence it.
+}
+
 \examples{
  library(encore.analytics)
  library(mice)
  library(MatchThem)
 
- # simulate a cohort with 1,000 patients with 20\% missing data
+ # simulate a cohort with 500 patients with 20\% missing data
  data <- simulate_data(
    n = 500,
    imposeNA = TRUE,
@@ -168,7 +250,8 @@ More references:
  # fit a survival model
  km_fit <- as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
 
- # estimate and pool median survival times and Kaplan-Meier curve
+ # 1) weighted (wimids) or matched (mimids) object:
+ # weights (and clusters) are set automatically
  km_out <- km_pooling(
    x = wimids,
    surv_formula = km_fit
@@ -180,9 +263,34 @@ More references:
  # KM curve
  km_out$km_plot
 
- # pass additional arguments to the underlying survfit2() call:
- # pass a column-based NSE argument (e.g. id = patientid) through `...`;
- # patientid is resolved as a column of each imputed/weighted dataset.
+ # 2) list of data frames: weights are specified explicitly via `...`
+ # (all = FALSE excludes observations with zero weight)
+ datasets <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+ km_out_list <- km_pooling(
+   x = datasets,
+   surv_formula = km_fit,
+   weights = weights
+   )
+
+ # for matched datasets, additionally specify the matched sets as clusters:
+ # km_pooling(x = datasets, surv_formula = km_fit, weights = weights, cluster = subclass)
+
+ # weights stored in a column with another name, e.g., `w`
+ datasets_w <- lapply(datasets, function(d) dplyr::rename(d, w = weights))
+ km_out_w <- km_pooling(
+   x = datasets_w,
+   surv_formula = km_fit,
+   weights = w
+   )
+
+ # 3) imputed (mids) object: unweighted Kaplan-Meier curve
+ km_out_mids <- km_pooling(
+   x = mids,
+   surv_formula = km_fit
+   )
+
+ # 4) pass additional arguments to the underlying survfit2() call:
+ # column names are resolved in each imputed dataset, e.g. `id = patientid`.
  # survfit() uses `id` as the subject identifier for its robust/sandwich
  # variance calculation, clustering rows by patient instead of treating
  # each row as its own independent cluster (relevant if a patient can
@@ -193,6 +301,17 @@ More references:
    id = patientid
    )
 
+}
+\references{
+Morisot A, Bessaoud F, Landais P, et al. Prostate cancer: net survival and cause-specific survival
+rates after multiple imputation. \emph{BMC Med Res Methodol}. 2015;15:54.
+\doi{10.1186/s12874-015-0048-4}
+
+Marshall A, Altman DG, Holder RL, Royston P. Combining estimates of interest in prognostic
+modelling studies after multiple imputation: current practice and guidelines.
+\emph{BMC Med Res Methodol}. 2009;9:57. \doi{10.1186/1471-2288-9-57}
+
+Rubin DB. \emph{Multiple Imputation for Nonresponse in Surveys}. Wiley; 1987.
 }
 \seealso{
 \code{\link[survival]{survfit}} \code{\link[mice]{pool.scalar}} \code{\link[MatchThem]{matchthem}} \code{\link[MatchThem]{weightthem}} \code{\link[ggsurvfit]{survfit2}} \code{\link[ggsurvfit]{tidy_survfit}}

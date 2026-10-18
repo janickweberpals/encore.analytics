@@ -6,14 +6,30 @@
 \usage{
 cox_pooling(
   x,
-  surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
+  surv_formula = stats::as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat),
+  ...
 )
 }
 \arguments{
-\item{x}{A list of imputed datasets with weights or raking weights (e.g., from \code{\link[encore.analytics]{raking_weights}})
-and optional cluster information (for matched datasets).}
+\item{x}{The imputed datasets to analyze. One of:
+\itemize{
+\item a list of data frames (one per imputed dataset), e.g., the output of
+\code{\link{raking_weights}} or of \code{MatchThem::complete(..., action = "all")}
+\item a weighted (\code{wimids}) or matched (\code{mimids}) object created with \pkg{MatchThem}
+\item an imputed (\code{mids}) object created with \pkg{mice}
+}
+
+See the section "Input types and default model arguments" for how each input is handled.}
 
 \item{surv_formula}{A formula for the Cox proportional hazards model (default is \code{Surv(fu_itt_months, death_itt) ~ treat}).}
+
+\item{...}{Additional arguments passed on to the per-dataset model call
+(\code{\link[ggsurvfit]{survfit2}} for \code{km_pooling()}, \code{\link[survival]{coxph}} for
+\code{cox_pooling()}). They are used in addition to, and take precedence over, the default
+arguments of the input type (see the section "Input types and default model arguments").
+Only \code{formula} and \code{data} are set internally and cannot be supplied here.
+Column names are written without quotes and are looked up in each dataset, e.g.
+\code{weights = w} or \code{id = patientid}.}
 }
 \value{
 A data frame containing the pooled results, including hazard ratios, confidence intervals, and p-values.
@@ -24,25 +40,90 @@ a list of imputed datasets. It leverages the \code{mice::as.mira} and \code{mice
 ensure proper pooling of results across multiple imputations using Rubin's rules.
 }
 \details{
-The function requires a list of imputed data frames with weights and optional cluster (matching) information,
-as well as a formula for the Cox proportional hazards model. The data frames must include a column named
-\code{weights}, and optionally a column named \code{subclass} (for matched datasets to indicate cluster membership).
+The function takes the imputed datasets (\code{x}) as a list of data frames, or as a
+mimids, wimids or mids object (see the sections "Input types and default model arguments" and
+"Precedence of arguments in ..." below), as well as a formula for the Cox proportional hazards model.
+Weights and clusters of lists of data frames are specified explicitly via \code{...}, e.g.,
+\code{weights = weights} for weighted data and \code{weights = weights, cluster = subclass}
+for matched data. A list is particularly useful when working with imputed datasets that are not in the
+form of \code{mimids} or \code{wimids} objects, such as when intermediate steps like raking weights
+(via \code{raking_weights}) are applied. Arguments of the \code{\link[survival]{coxph}} call
+can be supplied via \code{...}, e.g., \code{ties = "breslow"}.
 
-This function is particularly useful when working with imputed datasets that are not in the form of
-\code{mimids} or \code{wimids} objects, such as when intermediate steps like raking weights
-(via \code{raking_weights}) are applied. It provides a flexible way to fit and pool Cox models
-while ensuring compatibility with Rubin's rules for multiple imputation.
+\strong{Breaking change in 0.4.0}: previously, a list of data frames had to contain a column named
+\code{weights}, which was used automatically, as was a column named \code{subclass} (cluster
+membership of matched datasets). Weights and clusters are no longer applied automatically to lists, in line
+with \code{\link{km_pooling}}. Update calls such as \code{cox_pooling(x, surv_formula)} to
+\code{cox_pooling(x, surv_formula, weights = weights)} (weighted data) or
+\code{cox_pooling(x, surv_formula, weights = weights, cluster = subclass)} (matched data).
+Calls that are not updated fit an unweighted model and raise a warning that names the unused columns.
+mimids and wimids objects are not affected.
 
 The function follows these steps:
 \enumerate{
-\item Fit a Cox proportional hazards model to each imputed dataset. If a \code{subclass} column is present,
-it is used as a cluster variable for matched pairs.
+\item Fit a Cox proportional hazards model to each imputed dataset, using the weights and cluster
+(if any) of the input type or specified via \code{...}.
 \item Convert the list of fitted models into a \code{mira} object using \code{mice::as.mira}.
 \item Pool the results using \code{mice::pool}, which applies Rubin's rules for combining estimates
 and variances across imputations.
 \item Format the pooled results, including exponentiating the hazard ratios and calculating confidence intervals.
 }
 }
+\section{Input types and default model arguments}{
+
+
+The datasets are first brought into the form of a list of data frames. Depending on the type of
+\code{x}, default model arguments are set:\tabular{llll}{
+   Input \code{x} \tab How the datasets are obtained \tab \code{weights} \tab \code{cluster} \cr
+   \code{wimids} \tab \code{MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)} \tab \code{weights} \tab none \cr
+   \code{mimids} \tab same as \code{wimids} \tab \code{weights} \tab \code{subclass} \cr
+   \code{mids} \tab \code{mice::complete(x, action = "all", include = FALSE)} \tab none (unweighted) \tab none \cr
+   list of data frames \tab used as supplied \tab none \tab none \cr
+}
+
+
+\strong{Lists of data frames are never interpreted automatically.} A list can come from many sources
+(weighting, matching, raking, your own code) so the function cannot know which columns are meant
+as weights or clusters. You state this explicitly through \code{...}, for example:
+\itemize{
+\item weighted data: \code{weights = weights}
+\item matched data: \code{weights = weights, cluster = subclass}
+\item weights stored in a column with another name: \code{weights = w}
+}
+
+If the datasets contain a column named \code{weights} or \code{subclass} that is not used
+because no \code{weights} or \code{cluster} (or \code{id}) argument was specified, a warning
+is raised that names the argument to add. Specify \code{weights = NULL} or \code{cluster = NULL}
+to confirm that the column should deliberately be ignored.
+
+\strong{Important}: when you build the list from a \code{mimids} or \code{wimids} object yourself,
+use \code{MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)}. With
+\code{all = TRUE}, unmatched patients and patients with zero weight are included in the models.
+}
+
+\section{Precedence of arguments in \code{...}}{
+
+
+Default arguments of the input type are applied first, then the arguments you supply via
+\code{...}. If both contain the same argument, \strong{your argument wins}. For example, for a
+\code{mimids} object \code{cluster = NULL} fits the model without clustering on the matched sets
+and \code{cluster = pair_id} clusters on another column. \code{formula} and \code{data} are the only
+reserved arguments.
+
+\code{robust} is set automatically: unless you specify it, \code{robust = TRUE} is used whenever
+weights, a cluster or an id are part of the model (the model-based variance is not valid in these
+cases), otherwise the default of the model function is kept. An explicitly supplied \code{robust}
+always takes precedence.
+}
+
+\section{Transparency}{
+
+
+Every call prints a message that lists how the datasets were obtained and exactly which
+arguments were used for the models, including where each argument comes from (default for the
+input type, derived, or specified by you). Use \code{suppressMessages()} to silence it.
+}
+
 \examples{
 library(encore.analytics)
 library(mice)
@@ -71,16 +152,28 @@ wimids <- weightthem(
   estimand = "ATO"
 )
 
-# Create a list of imputed and weighted datasets
-wimids_list <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
-
 # Define a survival model formula
 cox_fit <- as.formula(survival::Surv(fu_itt_months, death_itt) ~ treat)
 
-# Fit and pool Cox proportional hazards model results
-cox_pooling(wimids_list, surv_formula = cox_fit)
+# 1) Weighted (wimids) or matched (mimids) object:
+# weights (and clusters) are set automatically
+cox_pooling(wimids, surv_formula = cox_fit)
+
+# 2) List of data frames: weights are specified explicitly via `...`
+# (all = FALSE excludes observations with zero weight)
+wimids_list <- MatchThem::complete(wimids, action = "all", all = FALSE, include = FALSE)
+cox_pooling(wimids_list, surv_formula = cox_fit, weights = weights)
+
+# for matched datasets, additionally specify the matched sets as clusters:
+# cox_pooling(matched_list, surv_formula = cox_fit, weights = weights, cluster = subclass)
+
+# 3) Imputed (mids) object: unweighted Cox model
+cox_pooling(mids, surv_formula = cox_fit)
+
+# 4) Pass additional arguments to the underlying coxph() call
+cox_pooling(wimids, surv_formula = cox_fit, ties = "breslow")
 }
 \seealso{
-\code{\link[survival]{coxph}}, \code{\link[mice]{pool}}, \code{\link[mice]{as.mira}},
-\code{\link[MatchThem]{matchthem}}, \code{\link[MatchThem]{weightthem}}
+\code{\link{km_pooling}}, \code{\link{raking_weights}}, \code{\link[survival]{coxph}}, \code{\link[mice]{pool}},
+\code{\link[mice]{as.mira}}, \code{\link[MatchThem]{matchthem}}, \code{\link[MatchThem]{weightthem}}
 }
