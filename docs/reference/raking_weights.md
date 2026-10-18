@@ -85,6 +85,7 @@ analysis (e.g., Kaplan-Meier, Cox proportional hazards regression).
 ## Examples
 
 ``` r
+
  library(encore.analytics)
  library(mice)
  library(dplyr)

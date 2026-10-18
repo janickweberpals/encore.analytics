@@ -11,7 +11,7 @@ matched/weighted datasets"><meta property="og:image" content="https://janickwebe
 
     <a class="navbar-brand me-2" href="../index.html">encore.analytics</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -58,7 +58,8 @@ matched/weighted datasets</p>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">km_pooling</span><span class="op">(</span></span>
 <span>  x <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  surv_formula <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/formula.html" class="external-link">as.formula</a></span><span class="op">(</span><span class="fu">survival</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">fu_itt_months</span>, <span class="va">death_itt</span><span class="op">)</span> <span class="op">~</span> <span class="va">treat</span><span class="op">)</span>,</span>
-<span>  times <span class="op">=</span> <span class="cn">NULL</span></span>
+<span>  times <span class="op">=</span> <span class="cn">NULL</span>,</span>
+<span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -67,7 +68,11 @@ matched/weighted datasets</p>
 
 
 <dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
-<dd><p>imputed and matched (mimids) or weighted (wimids) object</p></dd>
+<dd><p>The imputed datasets to analyze. One of:</p><ul><li><p>a list of data frames (one per imputed dataset), e.g., the output of
+<code><a href="raking_weights.html">raking_weights</a></code> or of <code>MatchThem::complete(..., action = "all")</code></p></li>
+<li><p>a weighted (<code>wimids</code>) or matched (<code>mimids</code>) object created with <span class="pkg">MatchThem</span></p></li>
+<li><p>an imputed (<code>mids</code>) object created with <span class="pkg">mice</span></p></li>
+</ul><p>See the section "Input types and default model arguments" for how each input is handled.</p></dd>
 
 
 <dt id="arg-surv-formula">surv_formula<a class="anchor" aria-label="anchor" href="#arg-surv-formula"></a></dt>
@@ -77,6 +82,16 @@ matched/weighted datasets</p>
 <dt id="arg-times">times<a class="anchor" aria-label="anchor" href="#arg-times"></a></dt>
 <dd><p>numeric vector of follow-up time points at which survival probabilities are to be estimated (propagated to <code><a href="http://www.danieldsjoberg.com/ggsurvfit/reference/tidy_survfit.html" class="external-link">tidy_survfit</a></code>).
 If NULL (default), survival probabilities are estimated and pooled across all observed event times.</p></dd>
+
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Additional arguments passed on to the per-dataset model call
+(<code><a href="http://www.danieldsjoberg.com/ggsurvfit/reference/survfit2.html" class="external-link">survfit2</a></code> for <code>km_pooling()</code>, <code><a href="https://rdrr.io/pkg/survival/man/coxph.html" class="external-link">coxph</a></code> for
+<code><a href="cox_pooling.html">cox_pooling()</a></code>). They are used in addition to, and take precedence over, the default
+arguments of the input type (see the section "Input types and default model arguments").
+Only <code>formula</code> and <code>data</code> are set internally and cannot be supplied here.
+Column names are written without quotes and are looked up in each dataset, e.g.
+<code>weights = w</code> or <code>id = patientid</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -89,7 +104,7 @@ If NULL (default), survival probabilities are estimated and pooled across all ob
 </ul><p><code>km_survival_table</code>:</p><ul><li><p>strata = stratum</p></li>
 <li><p>time = observed time point</p></li>
 <li><p>m = number of imputed datasets</p></li>
-<li><p>qbar = pooled univariate estimate of the complementary log-log transformed survival probabilities, see formula (3.1.2) Rubin (1987)</p></li>
+<li><p>qbar = pooled univariate estimate of the complementary log-log transformed survival probabilities \(\log(-\log(1 - S))\), see formula (3.1.2) Rubin (1987)</p></li>
 <li><p>t = total variance of the pooled univariate estimate of the complementary log-log transformed survival probabilities, formula (3.1.5) Rubin (1987)</p></li>
 <li><p>se = total standard error of the pooled estimate (derived as sqrt(t))</p></li>
 <li><p>surv = back-transformed pooled survival probability</p></li>
@@ -99,25 +114,46 @@ If NULL (default), survival probabilities are estimated and pooled across all ob
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function requires an object of class mimids or wimids (<code>x</code>), which is the output
-of a workflow that requires imputing multiple (m) datasets using mice or amelia
-and matching or weighting each imputed dataset via the MatchThem package
-(see examples).</p>
+    <p>The function takes the imputed datasets (<code>x</code>) as a list of data frames, or as a
+mimids, wimids or mids object (see the sections "Input types and default model arguments" and
+"Precedence of arguments in ..." below). The latter are the output of a workflow that requires
+imputing multiple (m) datasets using mice or amelia and matching or weighting each imputed dataset
+via the MatchThem package (see examples). Weights and clusters of lists of data frames are specified
+explicitly via <code>...</code>, e.g., <code>weights = weights, cluster = subclass</code>.</p>
 <p>The function fits the pre-specified survfit model (<code>surv_formula</code>, <code><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></code> package)
 to compute survival probabilities at each individual time point according to the Kaplan-Meier method.
 Survival probabilities can be estimated at all observed event times (default) or at user-specified time points
 using the <code>times</code> argument, which is passed directly to <code><a href="http://www.danieldsjoberg.com/ggsurvfit/reference/tidy_survfit.html" class="external-link">tidy_survfit</a></code>.
-For matched and weighted datasets, weights, cluster membership (matching only) and robust
-variance estimates are considered in the <code><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></code> call by default.</p>
+Arguments of the <code><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></code> call can be supplied via <code>...</code>,
+e.g. <code>type = "fleming-harrington"</code>. For matched and weighted datasets (mimids and wimids objects),
+weights, cluster membership (matching only) and robust variance estimates are considered
+by default. <code>...</code> only affects the underlying Kaplan-Meier fit of each imputed dataset;
+the complementary log-log transformation, Rubin's rule pooling and confidence interval
+computation are unaffected.</p>
 <p>Since survival probabilities typically don't follow normal distributions,
 these need to be transformed to approximate normality first before pooling
-across imputed datasets and time points. To that end, survival probabilities are first
-transformed using a complementary log-log transformation (<code>log(-log(1-pr(surv)))</code>)
-as recommended by multiple sources (Marshall, Billingham, and Bryan (2009)).</p>
+across imputed datasets and time points. To that end, the method of Morisot et al. (2015) is
+implemented, who applied Rubin's rules after a complementary log-log transformation of the
+survival probabilities, following the recommendation of Marshall et al. (2009) to combine
+predicted survival probabilities after this transformation. In each imputed dataset
+<em>i</em> and at each time point <em>t</em>, the survival probability \(S_i(t)\) is transformed to
+$$Q_i(t) = \log(-\log(1 - S_i(t)))$$
+and the corresponding within-dataset variance is derived from the variance of the survival
+probability (the squared standard error reported by <code><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></code>) with the delta method:
+$$U_i(t) = \frac{Var[S_i(t)]}{\left[(1 - S_i(t)) \log(1 - S_i(t))\right]^2}$$</p>
+<p>Note that the complementary log-log transformation is applied to the survival probability
+\(S\) itself, as in Morisot et al. (2015). This is not the same transformation as the
+\(\log(-\log(S))\) used for the confidence intervals of <code><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></code>
+with <code>conf.type = "log-log"</code>. For a single dataset, the point estimates and standard errors
+therefore agree with <code><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></code>, but the confidence intervals differ slightly.</p>
 <p>To pool the transformed estimates across imputed datasets and time points, the <code><a href="https://amices.org/mice/reference/pool.scalar.html" class="external-link">pool.scalar</a></code>
 function is used to apply Rubin's rule to combine pooled estimates (qbar) according to
 formula (3.1.2) Rubin (1987) and to compute the corresponding total variance (t) of the pooled
-estimate according to formula (3.1.5) Rubin (1987). When <code>times = NULL</code>, the pooling is performed
+estimate according to formula (3.1.5) Rubin (1987), i.e.,
+\(T = \bar{U} + (1 + 1/m) B\) with the average within-dataset variance \(\bar{U}\) and
+the between-dataset variance \(B\) (as in Morisot et al. (2015)). If only a single dataset is supplied (m = 1, e.g., complete
+data without imputation), the between-imputation variance is 0 by definition, the total variance equals the
+within-dataset variance and a warning is raised. When <code>times = NULL</code>, the pooling is performed
 at each unique combination of event times across all imputed datasets. When specific time points are provided
 via the <code>times</code> argument, pooling occurs only at those pre-specified time points, ensuring consistency
 across datasets and facilitating comparison at clinically relevant follow-up intervals.</p>
@@ -131,7 +167,7 @@ with transformed and backtransformed estimates is returned with the
 considered. By convention, Kaplan-Meier survival curves start at time = 0 with survival probability = 1
 unless a delayed entry survival model is fitted (not supported yet). In the case that there is no
 observation in the data at at time = 0 with survival probability = 1, the <code><a href="http://www.danieldsjoberg.com/ggsurvfit/reference/tidy_survfit.html" class="external-link">tidy_survfit</a></code>
-extrapolates this across strata. For the complimentary log-log transformation this means, that survival probabilities = 1
+extrapolates this across strata. For the complementary log-log transformation this means, that survival probabilities = 1
 at time = 0 and corresponding confidence intervals are extrapolated to 1. If the survival proability reaches exactly 0,
 the survival probability and corresponding confidence intervals are set to 0 as well.</p>
 <p>Finally, the median survival time is extracted from the <code>km_survival_table</code> table
@@ -156,9 +192,60 @@ ensure they are sufficiently granular to capture the survival dynamics of intere
 <li><p>Extract median survival time and corresponding 95% confidence intervals</p></li>
 <li><p>Plot Kaplan-Meier curve with pooled survival probabilities and confidence intervals</p></li>
 </ol><p>More references:</p><ul><li><p>https://stefvanbuuren.name/fimd/sec-pooling.html</p></li>
-<li><p>https://link.springer.com/article/10.1007/s10198-008-0129-y</p></li>
-<li><p>https://bmcmedresmethodol.biomedcentral.com/articles/10.1186/s12874-015-0048-4</p></li>
 </ul></div>
+    <div class="section level2">
+    <h2 id="input-types-and-default-model-arguments">Input types and default model arguments<a class="anchor" aria-label="anchor" href="#input-types-and-default-model-arguments"></a></h2>
+
+
+
+<p>The datasets are first brought into the form of a list of data frames. Depending on the type of
+<code>x</code>, default model arguments are set:</p><table class="table table"><tr><td>Input <code>x</code></td><td>How the datasets are obtained</td><td><code>weights</code></td><td><code>cluster</code></td></tr><tr><td><code>wimids</code></td><td><code>MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)</code></td><td><code>weights</code></td><td>none</td></tr><tr><td><code>mimids</code></td><td>same as <code>wimids</code></td><td><code>weights</code></td><td><code>subclass</code></td></tr><tr><td><code>mids</code></td><td><code>mice::complete(x, action = "all", include = FALSE)</code></td><td>none (unweighted)</td><td>none</td></tr><tr><td>list of data frames</td><td>used as supplied</td><td>none</td><td>none</td></tr></table><p><strong>Lists of data frames are never interpreted automatically.</strong> A list can come from many sources
+(weighting, matching, raking, your own code) so the function cannot know which columns are meant
+as weights or clusters. You state this explicitly through <code>...</code>, for example:</p><ul><li><p>weighted data: <code>weights = weights</code></p></li>
+<li><p>matched data: <code>weights = weights, cluster = subclass</code></p></li>
+<li><p>weights stored in a column with another name: <code>weights = w</code></p></li>
+</ul><p>If the datasets contain a column named <code>weights</code> or <code>subclass</code> that is not used
+because no <code>weights</code> or <code>cluster</code> (or <code>id</code>) argument was specified, a warning
+is raised that names the argument to add. Specify <code>weights = NULL</code> or <code>cluster = NULL</code>
+to confirm that the column should deliberately be ignored.</p>
+<p><strong>Important</strong>: when you build the list from a <code>mimids</code> or <code>wimids</code> object yourself,
+use <code>MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)</code>. With
+<code>all = TRUE</code>, unmatched patients and patients with zero weight are included in the models.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="precedence-of-arguments-in-">Precedence of arguments in <code>...</code><a class="anchor" aria-label="anchor" href="#precedence-of-arguments-in-"></a></h2>
+
+
+
+<p>Default arguments of the input type are applied first, then the arguments you supply via
+<code>...</code>. If both contain the same argument, <strong>your argument wins</strong>. For example, for a
+<code>mimids</code> object <code>cluster = NULL</code> fits the model without clustering on the matched sets
+and <code>cluster = pair_id</code> clusters on another column. <code>formula</code> and <code>data</code> are the only
+reserved arguments.</p>
+<p><code>robust</code> is set automatically: unless you specify it, <code>robust = TRUE</code> is used whenever
+weights, a cluster or an id are part of the model (the model-based variance is not valid in these
+cases), otherwise the default of the model function is kept. An explicitly supplied <code>robust</code>
+always takes precedence.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="transparency">Transparency<a class="anchor" aria-label="anchor" href="#transparency"></a></h2>
+
+
+
+<p>Every call prints a message that lists how the datasets were obtained and exactly which
+arguments were used for the models, including where each argument comes from (default for the
+input type, derived, or specified by you). Use <code><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressMessages()</a></code> to silence it.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="references">References<a class="anchor" aria-label="anchor" href="#references"></a></h2>
+    <p>Morisot A, Bessaoud F, Landais P, et al. Prostate cancer: net survival and cause-specific survival
+rates after multiple imputation. <em>BMC Med Res Methodol</em>. 2015;15:54.
+<a href="https://doi.org/10.1186/s12874-015-0048-4" class="external-link">doi:10.1186/s12874-015-0048-4</a></p>
+<p>Marshall A, Altman DG, Holder RL, Royston P. Combining estimates of interest in prognostic
+modelling studies after multiple imputation: current practice and guidelines.
+<em>BMC Med Res Methodol</em>. 2009;9:57. <a href="https://doi.org/10.1186/1471-2288-9-57" class="external-link">doi:10.1186/1471-2288-9-57</a></p>
+<p>Rubin DB. <em>Multiple Imputation for Nonresponse in Surveys</em>. Wiley; 1987.</p>
+    </div>
     <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
     <div class="dont-index"><p><code><a href="https://rdrr.io/pkg/survival/man/survfit.html" class="external-link">survfit</a></code> <code><a href="https://amices.org/mice/reference/pool.scalar.html" class="external-link">pool.scalar</a></code> <code><a href="https://rdrr.io/pkg/MatchThem/man/matchthem.html" class="external-link">matchthem</a></code> <code><a href="https://rdrr.io/pkg/MatchThem/man/weightthem.html" class="external-link">weightthem</a></code> <code><a href="http://www.danieldsjoberg.com/ggsurvfit/reference/survfit2.html" class="external-link">survfit2</a></code> <code><a href="http://www.danieldsjoberg.com/ggsurvfit/reference/tidy_survfit.html" class="external-link">tidy_survfit</a></code></p></div>
@@ -170,7 +257,7 @@ ensure they are sufficiently granular to capture the survival dynamics of intere
 <span class="r-in"><span> <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/amices/mice" class="external-link">mice</a></span><span class="op">)</span></span></span>
 <span class="r-in"><span> <span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/FarhadPishgar/MatchThem" class="external-link">MatchThem</a></span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span> <span class="co"># simulate a cohort with 1,000 patients with 20% missing data</span></span></span>
+<span class="r-in"><span> <span class="co"># simulate a cohort with 500 patients with 20% missing data</span></span></span>
 <span class="r-in"><span> <span class="va">data</span> <span class="op">&lt;-</span> <span class="fu"><a href="simulate_data.html">simulate_data</a></span><span class="op">(</span></span></span>
 <span class="r-in"><span>   n <span class="op">=</span> <span class="fl">500</span>,</span></span>
 <span class="r-in"><span>   imposeNA <span class="op">=</span> <span class="cn">TRUE</span>,</span></span>
@@ -203,11 +290,19 @@ ensure they are sufficiently granular to capture the survival dynamics of intere
 <span class="r-in"><span> <span class="co"># fit a survival model</span></span></span>
 <span class="r-in"><span> <span class="va">km_fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/formula.html" class="external-link">as.formula</a></span><span class="op">(</span><span class="fu">survival</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">fu_itt_months</span>, <span class="va">death_itt</span><span class="op">)</span> <span class="op">~</span> <span class="va">treat</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span> <span class="co"># estimate and pool median survival times and Kaplan-Meier curve</span></span></span>
+<span class="r-in"><span> <span class="co"># 1) weighted (wimids) or matched (mimids) object:</span></span></span>
+<span class="r-in"><span> <span class="co"># weights (and clusters) are set automatically</span></span></span>
 <span class="r-in"><span> <span class="va">km_out</span> <span class="op">&lt;-</span> <span class="fu">km_pooling</span><span class="op">(</span></span></span>
 <span class="r-in"><span>   x <span class="op">=</span> <span class="va">wimids</span>,</span></span>
 <span class="r-in"><span>   surv_formula <span class="op">=</span> <span class="va">km_fit</span></span></span>
 <span class="r-in"><span>   <span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Input: &lt;wimids&gt;: weighted datasets extracted with MatchThem::complete(action</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   = "all", all = FALSE, include = FALSE) (m = 5)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Fitting Kaplan-Meier survival function with ggsurvfit::survfit2() in each</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   dataset:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   formula: survival::Surv(fu_itt_months, death_itt) ~ treat</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   weights = weights (default for the input type)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   robust = TRUE (derived: weights, cluster or id are used)</span>
 <span class="r-in"><span></span></span>
 <span class="r-in"><span> <span class="co"># median survival time</span></span></span>
 <span class="r-in"><span> <span class="va">km_out</span><span class="op">$</span><span class="va">km_median_survival</span></span></span>
@@ -221,6 +316,72 @@ ensure they are sufficiently granular to capture the survival dynamics of intere
 <span class="r-in"><span> <span class="va">km_out</span><span class="op">$</span><span class="va">km_plot</span></span></span>
 <span class="r-plt img"><img src="km_pooling-1.png" alt="" width="700" height="433"></span>
 <span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># 2) list of data frames: weights are specified explicitly via `...`</span></span></span>
+<span class="r-in"><span> <span class="co"># (all = FALSE excludes observations with zero weight)</span></span></span>
+<span class="r-in"><span> <span class="va">datasets</span> <span class="op">&lt;-</span> <span class="fu">MatchThem</span><span class="fu">::</span><span class="fu"><a href="https://tidyr.tidyverse.org/reference/complete.html" class="external-link">complete</a></span><span class="op">(</span><span class="va">wimids</span>, action <span class="op">=</span> <span class="st">"all"</span>, all <span class="op">=</span> <span class="cn">FALSE</span>, include <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-in"><span> <span class="va">km_out_list</span> <span class="op">&lt;-</span> <span class="fu">km_pooling</span><span class="op">(</span></span></span>
+<span class="r-in"><span>   x <span class="op">=</span> <span class="va">datasets</span>,</span></span>
+<span class="r-in"><span>   surv_formula <span class="op">=</span> <span class="va">km_fit</span>,</span></span>
+<span class="r-in"><span>   weights <span class="op">=</span> <span class="va">weights</span></span></span>
+<span class="r-in"><span>   <span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Input: list of data frames supplied by the user; no weights or cluster</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   applied automatically (m = 5)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Fitting Kaplan-Meier survival function with ggsurvfit::survfit2() in each</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   dataset:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   formula: survival::Surv(fu_itt_months, death_itt) ~ treat</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   weights = weights (specified by you)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   robust = TRUE (derived: weights, cluster or id are used)</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># for matched datasets, additionally specify the matched sets as clusters:</span></span></span>
+<span class="r-in"><span> <span class="co"># km_pooling(x = datasets, surv_formula = km_fit, weights = weights, cluster = subclass)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># weights stored in a column with another name, e.g., `w`</span></span></span>
+<span class="r-in"><span> <span class="va">datasets_w</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">datasets</span>, <span class="kw">function</span><span class="op">(</span><span class="va">d</span><span class="op">)</span> <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/rename.html" class="external-link">rename</a></span><span class="op">(</span><span class="va">d</span>, w <span class="op">=</span> <span class="va">weights</span><span class="op">)</span><span class="op">)</span></span></span>
+<span class="r-in"><span> <span class="va">km_out_w</span> <span class="op">&lt;-</span> <span class="fu">km_pooling</span><span class="op">(</span></span></span>
+<span class="r-in"><span>   x <span class="op">=</span> <span class="va">datasets_w</span>,</span></span>
+<span class="r-in"><span>   surv_formula <span class="op">=</span> <span class="va">km_fit</span>,</span></span>
+<span class="r-in"><span>   weights <span class="op">=</span> <span class="va">w</span></span></span>
+<span class="r-in"><span>   <span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Input: list of data frames supplied by the user; no weights or cluster</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   applied automatically (m = 5)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Fitting Kaplan-Meier survival function with ggsurvfit::survfit2() in each</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   dataset:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   formula: survival::Surv(fu_itt_months, death_itt) ~ treat</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   weights = w (specified by you)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   robust = TRUE (derived: weights, cluster or id are used)</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># 3) imputed (mids) object: unweighted Kaplan-Meier curve</span></span></span>
+<span class="r-in"><span> <span class="va">km_out_mids</span> <span class="op">&lt;-</span> <span class="fu">km_pooling</span><span class="op">(</span></span></span>
+<span class="r-in"><span>   x <span class="op">=</span> <span class="va">mids</span>,</span></span>
+<span class="r-in"><span>   surv_formula <span class="op">=</span> <span class="va">km_fit</span></span></span>
+<span class="r-in"><span>   <span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Input: &lt;mids&gt;: imputed datasets extracted with mice::complete(action = "all",</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   include = FALSE); unweighted (m = 5)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Fitting Kaplan-Meier survival function with ggsurvfit::survfit2() in each</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   dataset:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   formula: survival::Surv(fu_itt_months, death_itt) ~ treat</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   no weights, cluster or other arguments used</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span> <span class="co"># 4) pass additional arguments to the underlying survfit2() call:</span></span></span>
+<span class="r-in"><span> <span class="co"># column names are resolved in each imputed dataset, e.g. `id = patientid`.</span></span></span>
+<span class="r-in"><span> <span class="co"># survfit() uses `id` as the subject identifier for its robust/sandwich</span></span></span>
+<span class="r-in"><span> <span class="co"># variance calculation, clustering rows by patient instead of treating</span></span></span>
+<span class="r-in"><span> <span class="co"># each row as its own independent cluster (relevant if a patient can</span></span></span>
+<span class="r-in"><span> <span class="co"># contribute more than one row, e.g. with time-varying covariates).</span></span></span>
+<span class="r-in"><span> <span class="va">km_out_id</span> <span class="op">&lt;-</span> <span class="fu">km_pooling</span><span class="op">(</span></span></span>
+<span class="r-in"><span>   x <span class="op">=</span> <span class="va">wimids</span>,</span></span>
+<span class="r-in"><span>   surv_formula <span class="op">=</span> <span class="va">km_fit</span>,</span></span>
+<span class="r-in"><span>   id <span class="op">=</span> <span class="va">patientid</span></span></span>
+<span class="r-in"><span>   <span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Input: &lt;wimids&gt;: weighted datasets extracted with MatchThem::complete(action</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   = "all", all = FALSE, include = FALSE) (m = 5)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Fitting Kaplan-Meier survival function with ggsurvfit::survfit2() in each</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   dataset:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   formula: survival::Surv(fu_itt_months, death_itt) ~ treat</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   weights = weights (default for the input type)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   id = patientid (specified by you)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   robust = TRUE (derived: weights, cluster or id are used)</span>
+<span class="r-in"><span></span></span>
 </code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
@@ -232,7 +393,7 @@ ensure they are sufficiently granular to capture the survival dynamics of intere
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

@@ -28,7 +28,7 @@
 
     <a class="navbar-brand me-2" href="index.html">encore.analytics</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -93,7 +93,7 @@
 <li>Multiple imputation of missing data</li>
 <li>Propensity score estimation and matching</li>
 <li>Survival analysis with multiply imputed data</li>
-<li>Agreement metrics for assessing consistency across imputed datasets</li>
+<li>Agreement metrics for comparing randomized controlled trial (RCT) and real-world evidence (RWE) emulation study results</li>
 <li>Specialized visualization tools for survival outcomes</li>
 </ul>
 </div>
@@ -103,13 +103,13 @@
 </h2>
 <ul>
 <li>
-<strong>Cox Model Pooling</strong>: Implementation of various approaches for pooling Cox proportional hazards models across multiply imputed datasets</li>
+<strong>Cox Model Pooling</strong>: Pooling of Cox proportional hazards models across multiply imputed datasets; accepts weighted or matched (<code>MatchThem</code>) objects, imputed (<code>mice</code>) objects, or lists of data frames, e.g., with raking weights</li>
 <li>
-<strong>Kaplan-Meier Pooling</strong>: Tools for combining and visualizing Kaplan-Meier curves from multiple imputations</li>
+<strong>Kaplan-Meier Pooling</strong>: Combining and visualizing Kaplan-Meier curves from multiple imputations (Rubin’s rules after a complementary log-log transformation, Morisot et al. 2015), with the same input options</li>
 <li>
 <strong>Raking Weights</strong>: Methods for calibrating weights in propensity score analyses</li>
 <li>
-<strong>Agreement Metrics</strong>: Functions to assess consistency and agreement across imputed datasets</li>
+<strong>Agreement Metrics</strong>: Functions to assess agreement between RCT and RWE emulation study results, with configurable metrics, aggregate agreement summaries, and transforms (log, logit, log-log) for different effect-size scales</li>
 <li>
 <strong>Table 1 Generation</strong>: Utilities for creating descriptive statistics tables</li>
 <li>
@@ -122,7 +122,7 @@
 <p>You can install the development version of encore.analytics from <a href="https://github.com/" class="external-link">GitHub</a> with:</p>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># install.packages("pak")</span></span>
-<span><span class="fu">pak</span><span class="fu">::</span><span class="fu">pak</span><span class="op">(</span><span class="st">"janickweberpals/encore.analytics"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">pak</span><span class="fu">::</span><span class="fu"><a href="https://pak.r-lib.org/reference/pak.html" class="external-link">pak</a></span><span class="op">(</span><span class="st">"janickweberpals/encore.analytics"</span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level2">
 <h2 id="documentation-and-examples">Documentation and Examples<a class="anchor" aria-label="anchor" href="#documentation-and-examples"></a>
@@ -147,7 +147,7 @@
 <li>
 <strong>Kaplan-Meier Pooling</strong>: Techniques for combining survival curves</li>
 <li>
-<strong>Agreement Metrics</strong>: Methods for assessing consistency across imputations</li>
+<strong>Agreement Metrics</strong>: Methods for assessing agreement between RCT and RWE emulation study results</li>
 </ol>
 </div>
 <div class="section level2">
@@ -179,8 +179,8 @@
 <h2 id="citation">Citation<a class="anchor" aria-label="anchor" href="#citation"></a>
 </h2>
 <p>If you use <code>encore.analytics</code> in your research, please cite it as:</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>Weberpals <span class="fu">J</span> (<span class="dv">2025</span>). encore.analytics<span class="sc">:</span> Multiple Imputation and Propensity Score </span>
-<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>Workflows <span class="cf">for</span> Oncology Trial Emulation. R package version <span class="dv">0</span>.<span class="dv">1</span>.<span class="fl">0.</span></span>
+<div class="sourceCode" id="cb2"><pre class="sourceCode R"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" tabindex="-1"></a>Weberpals <span class="fu">J</span> (<span class="dv">2026</span>). encore.analytics<span class="sc">:</span> Multiple Imputation and Propensity Score</span>
+<span id="cb2-2"><a href="#cb2-2" tabindex="-1"></a>Workflows <span class="cf">for</span> Oncology Trial Emulation. R package version <span class="dv">0</span>.<span class="dv">4</span>.<span class="fl">0.</span></span>
 <span id="cb2-3"><a href="#cb2-3" tabindex="-1"></a>https<span class="sc">:</span><span class="er">//</span>github.com<span class="sc">/</span>janickweberpals<span class="sc">/</span>encore.analytics</span></code></pre></div>
 </div>
 </div>
@@ -232,7 +232,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer>

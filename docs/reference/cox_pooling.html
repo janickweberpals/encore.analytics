@@ -11,7 +11,7 @@ ensure proper pooling of results across multiple imputations using Rubin's rules
 
     <a class="navbar-brand me-2" href="../index.html">encore.analytics</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.1</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.4.0</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,7 +57,8 @@ ensure proper pooling of results across multiple imputations using Rubin's rules
     <h2 id="ref-usage">Usage<a class="anchor" aria-label="anchor" href="#ref-usage"></a></h2>
     <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">cox_pooling</span><span class="op">(</span></span>
 <span>  <span class="va">x</span>,</span>
-<span>  surv_formula <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/formula.html" class="external-link">as.formula</a></span><span class="op">(</span><span class="fu">survival</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">fu_itt_months</span>, <span class="va">death_itt</span><span class="op">)</span> <span class="op">~</span> <span class="va">treat</span><span class="op">)</span></span>
+<span>  surv_formula <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/formula.html" class="external-link">as.formula</a></span><span class="op">(</span><span class="fu">survival</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">fu_itt_months</span>, <span class="va">death_itt</span><span class="op">)</span> <span class="op">~</span> <span class="va">treat</span><span class="op">)</span>,</span>
+<span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -66,12 +67,25 @@ ensure proper pooling of results across multiple imputations using Rubin's rules
 
 
 <dl><dt id="arg-x">x<a class="anchor" aria-label="anchor" href="#arg-x"></a></dt>
-<dd><p>A list of imputed datasets with weights or raking weights (e.g., from <code><a href="raking_weights.html">raking_weights</a></code>)
-and optional cluster information (for matched datasets).</p></dd>
+<dd><p>The imputed datasets to analyze. One of:</p><ul><li><p>a list of data frames (one per imputed dataset), e.g., the output of
+<code><a href="raking_weights.html">raking_weights</a></code> or of <code>MatchThem::complete(..., action = "all")</code></p></li>
+<li><p>a weighted (<code>wimids</code>) or matched (<code>mimids</code>) object created with <span class="pkg">MatchThem</span></p></li>
+<li><p>an imputed (<code>mids</code>) object created with <span class="pkg">mice</span></p></li>
+</ul><p>See the section "Input types and default model arguments" for how each input is handled.</p></dd>
 
 
 <dt id="arg-surv-formula">surv_formula<a class="anchor" aria-label="anchor" href="#arg-surv-formula"></a></dt>
 <dd><p>A formula for the Cox proportional hazards model (default is <code>Surv(fu_itt_months, death_itt) ~ treat</code>).</p></dd>
+
+
+<dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>
+<dd><p>Additional arguments passed on to the per-dataset model call
+(<code><a href="http://www.danieldsjoberg.com/ggsurvfit/reference/survfit2.html" class="external-link">survfit2</a></code> for <code><a href="km_pooling.html">km_pooling()</a></code>, <code><a href="https://rdrr.io/pkg/survival/man/coxph.html" class="external-link">coxph</a></code> for
+<code>cox_pooling()</code>). They are used in addition to, and take precedence over, the default
+arguments of the input type (see the section "Input types and default model arguments").
+Only <code>formula</code> and <code>data</code> are set internally and cannot be supplied here.
+Column names are written without quotes and are looked up in each dataset, e.g.
+<code>weights = w</code> or <code>id = patientid</code>.</p></dd>
 
 </dl></div>
     <div class="section level2">
@@ -80,24 +94,77 @@ and optional cluster information (for matched datasets).</p></dd>
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>The function requires a list of imputed data frames with weights and optional cluster (matching) information,
-as well as a formula for the Cox proportional hazards model. The data frames must include a column named
-<code>weights</code>, and optionally a column named <code>subclass</code> (for matched datasets to indicate cluster membership).</p>
-<p>This function is particularly useful when working with imputed datasets that are not in the form of
-<code>mimids</code> or <code>wimids</code> objects, such as when intermediate steps like raking weights
-(via <code>raking_weights</code>) are applied. It provides a flexible way to fit and pool Cox models
-while ensuring compatibility with Rubin's rules for multiple imputation.</p>
-<p>The function follows these steps:</p><ol><li><p>Fit a Cox proportional hazards model to each imputed dataset. If a <code>subclass</code> column is present,
-it is used as a cluster variable for matched pairs.</p></li>
+    <p>The function takes the imputed datasets (<code>x</code>) as a list of data frames, or as a
+mimids, wimids or mids object (see the sections "Input types and default model arguments" and
+"Precedence of arguments in ..." below), as well as a formula for the Cox proportional hazards model.
+Weights and clusters of lists of data frames are specified explicitly via <code>...</code>, e.g.,
+<code>weights = weights</code> for weighted data and <code>weights = weights, cluster = subclass</code>
+for matched data. A list is particularly useful when working with imputed datasets that are not in the
+form of <code>mimids</code> or <code>wimids</code> objects, such as when intermediate steps like raking weights
+(via <code>raking_weights</code>) are applied. Arguments of the <code><a href="https://rdrr.io/pkg/survival/man/coxph.html" class="external-link">coxph</a></code> call
+can be supplied via <code>...</code>, e.g., <code>ties = "breslow"</code>.</p>
+<p><strong>Breaking change in 0.4.0</strong>: previously, a list of data frames had to contain a column named
+<code>weights</code>, which was used automatically, as was a column named <code>subclass</code> (cluster
+membership of matched datasets). Weights and clusters are no longer applied automatically to lists, in line
+with <code><a href="km_pooling.html">km_pooling</a></code>. Update calls such as <code>cox_pooling(x, surv_formula)</code> to
+<code>cox_pooling(x, surv_formula, weights = weights)</code> (weighted data) or
+<code>cox_pooling(x, surv_formula, weights = weights, cluster = subclass)</code> (matched data).
+Calls that are not updated fit an unweighted model and raise a warning that names the unused columns.
+mimids and wimids objects are not affected.</p>
+<p>The function follows these steps:</p><ol><li><p>Fit a Cox proportional hazards model to each imputed dataset, using the weights and cluster
+(if any) of the input type or specified via <code>...</code>.</p></li>
 <li><p>Convert the list of fitted models into a <code>mira</code> object using <code><a href="https://amices.org/mice/reference/as.mira.html" class="external-link">mice::as.mira</a></code>.</p></li>
 <li><p>Pool the results using <code><a href="https://amices.org/mice/reference/pool.html" class="external-link">mice::pool</a></code>, which applies Rubin's rules for combining estimates
 and variances across imputations.</p></li>
 <li><p>Format the pooled results, including exponentiating the hazard ratios and calculating confidence intervals.</p></li>
 </ol></div>
     <div class="section level2">
+    <h2 id="input-types-and-default-model-arguments">Input types and default model arguments<a class="anchor" aria-label="anchor" href="#input-types-and-default-model-arguments"></a></h2>
+
+
+
+<p>The datasets are first brought into the form of a list of data frames. Depending on the type of
+<code>x</code>, default model arguments are set:</p><table class="table table"><tr><td>Input <code>x</code></td><td>How the datasets are obtained</td><td><code>weights</code></td><td><code>cluster</code></td></tr><tr><td><code>wimids</code></td><td><code>MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)</code></td><td><code>weights</code></td><td>none</td></tr><tr><td><code>mimids</code></td><td>same as <code>wimids</code></td><td><code>weights</code></td><td><code>subclass</code></td></tr><tr><td><code>mids</code></td><td><code>mice::complete(x, action = "all", include = FALSE)</code></td><td>none (unweighted)</td><td>none</td></tr><tr><td>list of data frames</td><td>used as supplied</td><td>none</td><td>none</td></tr></table><p><strong>Lists of data frames are never interpreted automatically.</strong> A list can come from many sources
+(weighting, matching, raking, your own code) so the function cannot know which columns are meant
+as weights or clusters. You state this explicitly through <code>...</code>, for example:</p><ul><li><p>weighted data: <code>weights = weights</code></p></li>
+<li><p>matched data: <code>weights = weights, cluster = subclass</code></p></li>
+<li><p>weights stored in a column with another name: <code>weights = w</code></p></li>
+</ul><p>If the datasets contain a column named <code>weights</code> or <code>subclass</code> that is not used
+because no <code>weights</code> or <code>cluster</code> (or <code>id</code>) argument was specified, a warning
+is raised that names the argument to add. Specify <code>weights = NULL</code> or <code>cluster = NULL</code>
+to confirm that the column should deliberately be ignored.</p>
+<p><strong>Important</strong>: when you build the list from a <code>mimids</code> or <code>wimids</code> object yourself,
+use <code>MatchThem::complete(x, action = "all", all = FALSE, include = FALSE)</code>. With
+<code>all = TRUE</code>, unmatched patients and patients with zero weight are included in the models.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="precedence-of-arguments-in-">Precedence of arguments in <code>...</code><a class="anchor" aria-label="anchor" href="#precedence-of-arguments-in-"></a></h2>
+
+
+
+<p>Default arguments of the input type are applied first, then the arguments you supply via
+<code>...</code>. If both contain the same argument, <strong>your argument wins</strong>. For example, for a
+<code>mimids</code> object <code>cluster = NULL</code> fits the model without clustering on the matched sets
+and <code>cluster = pair_id</code> clusters on another column. <code>formula</code> and <code>data</code> are the only
+reserved arguments.</p>
+<p><code>robust</code> is set automatically: unless you specify it, <code>robust = TRUE</code> is used whenever
+weights, a cluster or an id are part of the model (the model-based variance is not valid in these
+cases), otherwise the default of the model function is kept. An explicitly supplied <code>robust</code>
+always takes precedence.</p>
+    </div>
+    <div class="section level2">
+    <h2 id="transparency">Transparency<a class="anchor" aria-label="anchor" href="#transparency"></a></h2>
+
+
+
+<p>Every call prints a message that lists how the datasets were obtained and exactly which
+arguments were used for the models, including where each argument comes from (default for the
+input type, derived, or specified by you). Use <code><a href="https://rdrr.io/r/base/message.html" class="external-link">suppressMessages()</a></code> to silence it.</p>
+    </div>
+    <div class="section level2">
     <h2 id="see-also">See also<a class="anchor" aria-label="anchor" href="#see-also"></a></h2>
-    <div class="dont-index"><p><code><a href="https://rdrr.io/pkg/survival/man/coxph.html" class="external-link">coxph</a></code>, <code><a href="https://amices.org/mice/reference/pool.html" class="external-link">pool</a></code>, <code><a href="https://amices.org/mice/reference/as.mira.html" class="external-link">as.mira</a></code>,
-<code><a href="https://rdrr.io/pkg/MatchThem/man/matchthem.html" class="external-link">matchthem</a></code>, <code><a href="https://rdrr.io/pkg/MatchThem/man/weightthem.html" class="external-link">weightthem</a></code></p></div>
+    <div class="dont-index"><p><code><a href="km_pooling.html">km_pooling</a></code>, <code><a href="raking_weights.html">raking_weights</a></code>, <code><a href="https://rdrr.io/pkg/survival/man/coxph.html" class="external-link">coxph</a></code>, <code><a href="https://amices.org/mice/reference/pool.html" class="external-link">pool</a></code>,
+<code><a href="https://amices.org/mice/reference/as.mira.html" class="external-link">as.mira</a></code>, <code><a href="https://rdrr.io/pkg/MatchThem/man/matchthem.html" class="external-link">matchthem</a></code>, <code><a href="https://rdrr.io/pkg/MatchThem/man/weightthem.html" class="external-link">weightthem</a></code></p></div>
     </div>
 
     <div class="section level2">
@@ -152,14 +219,66 @@ and variances across imputations.</p></li>
 <span class="r-msg co"><span class="r-pr">#&gt;</span>  #5</span>
 <span class="r-msg co"><span class="r-pr">#&gt;</span> </span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Create a list of imputed and weighted datasets</span></span></span>
-<span class="r-in"><span><span class="va">wimids_list</span> <span class="op">&lt;-</span> <span class="fu">MatchThem</span><span class="fu">::</span><span class="fu"><a href="https://tidyr.tidyverse.org/reference/complete.html" class="external-link">complete</a></span><span class="op">(</span><span class="va">wimids</span>, action <span class="op">=</span> <span class="st">"all"</span>, all <span class="op">=</span> <span class="cn">FALSE</span>, include <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
-<span class="r-in"><span></span></span>
 <span class="r-in"><span><span class="co"># Define a survival model formula</span></span></span>
 <span class="r-in"><span><span class="va">cox_fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/formula.html" class="external-link">as.formula</a></span><span class="op">(</span><span class="fu">survival</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/survival/man/Surv.html" class="external-link">Surv</a></span><span class="op">(</span><span class="va">fu_itt_months</span>, <span class="va">death_itt</span><span class="op">)</span> <span class="op">~</span> <span class="va">treat</span><span class="op">)</span></span></span>
 <span class="r-in"><span></span></span>
-<span class="r-in"><span><span class="co"># Fit and pool Cox proportional hazards model results</span></span></span>
-<span class="r-in"><span><span class="fu">cox_pooling</span><span class="op">(</span><span class="va">wimids_list</span>, surv_formula <span class="op">=</span> <span class="va">cox_fit</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="co"># 1) Weighted (wimids) or matched (mimids) object:</span></span></span>
+<span class="r-in"><span><span class="co"># weights (and clusters) are set automatically</span></span></span>
+<span class="r-in"><span><span class="fu">cox_pooling</span><span class="op">(</span><span class="va">wimids</span>, surv_formula <span class="op">=</span> <span class="va">cox_fit</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Input: &lt;wimids&gt;: weighted datasets extracted with MatchThem::complete(action</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   = "all", all = FALSE, include = FALSE) (m = 5)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Fitting Cox proportional hazards model with survival::coxph() in each</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   dataset:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   formula: survival::Surv(fu_itt_months, death_itt) ~ treat</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   weights = weights (default for the input type)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   robust = TRUE (derived: weights, cluster or id are used)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    term  estimate  std.error statistic     p.value  conf.low conf.high</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 treat 0.7297697 0.08792742 -3.582799 0.000374082 0.6139819 0.8673933</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>              b       df dfcom       fmi      lambda m         riv        ubar</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 4.570604e-05 487.4987   496 0.0111428 0.007094245 5 0.007144933 0.007676384</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># 2) List of data frames: weights are specified explicitly via `...`</span></span></span>
+<span class="r-in"><span><span class="co"># (all = FALSE excludes observations with zero weight)</span></span></span>
+<span class="r-in"><span><span class="va">wimids_list</span> <span class="op">&lt;-</span> <span class="fu">MatchThem</span><span class="fu">::</span><span class="fu"><a href="https://tidyr.tidyverse.org/reference/complete.html" class="external-link">complete</a></span><span class="op">(</span><span class="va">wimids</span>, action <span class="op">=</span> <span class="st">"all"</span>, all <span class="op">=</span> <span class="cn">FALSE</span>, include <span class="op">=</span> <span class="cn">FALSE</span><span class="op">)</span></span></span>
+<span class="r-in"><span><span class="fu">cox_pooling</span><span class="op">(</span><span class="va">wimids_list</span>, surv_formula <span class="op">=</span> <span class="va">cox_fit</span>, weights <span class="op">=</span> <span class="va">weights</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Input: list of data frames supplied by the user; no weights or cluster</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   applied automatically (m = 5)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Fitting Cox proportional hazards model with survival::coxph() in each</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   dataset:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   formula: survival::Surv(fu_itt_months, death_itt) ~ treat</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   weights = weights (specified by you)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   robust = TRUE (derived: weights, cluster or id are used)</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    term  estimate  std.error statistic     p.value  conf.low conf.high</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 treat 0.7297697 0.08792742 -3.582799 0.000374082 0.6139819 0.8673933</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>              b       df dfcom       fmi      lambda m         riv        ubar</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 4.570604e-05 487.4987   496 0.0111428 0.007094245 5 0.007144933 0.007676384</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># for matched datasets, additionally specify the matched sets as clusters:</span></span></span>
+<span class="r-in"><span><span class="co"># cox_pooling(matched_list, surv_formula = cox_fit, weights = weights, cluster = subclass)</span></span></span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># 3) Imputed (mids) object: unweighted Cox model</span></span></span>
+<span class="r-in"><span><span class="fu">cox_pooling</span><span class="op">(</span><span class="va">mids</span>, surv_formula <span class="op">=</span> <span class="va">cox_fit</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Input: &lt;mids&gt;: imputed datasets extracted with mice::complete(action = "all",</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   include = FALSE); unweighted (m = 5)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Fitting Cox proportional hazards model with survival::coxph() in each</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   dataset:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   formula: survival::Surv(fu_itt_months, death_itt) ~ treat</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   no weights, cluster or other arguments used</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>    term  estimate  std.error statistic     p.value  conf.low conf.high b</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 treat 0.7494818 0.09202893 -3.133507 0.001829959 0.6255089 0.8980255 0</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span>        df dfcom         fmi lambda m riv        ubar</span>
+<span class="r-out co"><span class="r-pr">#&gt;</span> 1 493.962   496 0.004024452      0 5   0 0.008469323</span>
+<span class="r-in"><span></span></span>
+<span class="r-in"><span><span class="co"># 4) Pass additional arguments to the underlying coxph() call</span></span></span>
+<span class="r-in"><span><span class="fu">cox_pooling</span><span class="op">(</span><span class="va">wimids</span>, surv_formula <span class="op">=</span> <span class="va">cox_fit</span>, ties <span class="op">=</span> <span class="st">"breslow"</span><span class="op">)</span></span></span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Input: &lt;wimids&gt;: weighted datasets extracted with MatchThem::complete(action</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   = "all", all = FALSE, include = FALSE) (m = 5)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span> <span style="color: #00BBBB;">ℹ</span> Fitting Cox proportional hazards model with survival::coxph() in each</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   dataset:</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   formula: survival::Surv(fu_itt_months, death_itt) ~ treat</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   weights = weights (default for the input type)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   ties = "breslow" (specified by you)</span>
+<span class="r-msg co"><span class="r-pr">#&gt;</span>   robust = TRUE (derived: weights, cluster or id are used)</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>    term  estimate  std.error statistic     p.value  conf.low conf.high</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span> 1 treat 0.7297697 0.08792742 -3.582799 0.000374082 0.6139819 0.8673933</span>
 <span class="r-out co"><span class="r-pr">#&gt;</span>              b       df dfcom       fmi      lambda m         riv        ubar</span>
@@ -175,7 +294,7 @@ and variances across imputations.</p></li>
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer></div>

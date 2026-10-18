@@ -47,11 +47,14 @@ The package implements various methodologies for:
 
 ## Key Features
 
-- **Cox Model Pooling**: Implementation of various approaches for
-  pooling Cox proportional hazards models across multiply imputed
-  datasets
-- **Kaplan-Meier Pooling**: Tools for combining and visualizing
-  Kaplan-Meier curves from multiple imputations
+- **Cox Model Pooling**: Pooling of Cox proportional hazards models
+  across multiply imputed datasets; accepts weighted or matched
+  (`MatchThem`) objects, imputed (`mice`) objects, or lists of data
+  frames, e.g., with raking weights
+- **Kaplan-Meier Pooling**: Combining and visualizing Kaplan-Meier
+  curves from multiple imputations (Rubin’s rules after a complementary
+  log-log transformation, Morisot et al. 2015), with the same input
+  options
 - **Raking Weights**: Methods for calibrating weights in propensity
   score analyses
 - **Agreement Metrics**: Functions to assess agreement between RCT and
